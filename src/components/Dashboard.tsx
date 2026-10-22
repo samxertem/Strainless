@@ -1,41 +1,35 @@
-import type { Category, Item } from '../lib/types';
+import type { Item } from '../lib/types';
 import type { Bucket } from '../lib/buckets';
 import { Section } from './Section';
-import { ItemRow } from './ItemRow';
+import { ItemRow, type RowContext } from './ItemRow';
 
 interface Props {
   groups: Record<Bucket, Item[]>;
-  categoriesById: Map<number, Category>;
-  now: Date;
-  selectedId: number | null;
-  onOpen: (id: number) => void;
-  onToggleDone: (item: Item) => void;
+  ctx: RowContext;
 }
 
-const SECTIONS: { bucket: Bucket; title: string; emptyText?: string; defaultOpen?: boolean }[] = [
-  { bucket: 'overdue', title: 'Overdue' },
+const SECTIONS: {
+  bucket: Bucket; title: string; hint?: string; emptyText?: string; defaultOpen?: boolean; hideWhenEmpty?: boolean;
+}[] = [
+  { bucket: 'overdue', title: 'From earlier', hint: 'No guilt. Pick one when you have the energy, or move its date.', hideWhenEmpty: true },
   { bucket: 'today', title: 'Today', emptyText: 'Nothing due today.' },
   { bucket: 'thisWeek', title: 'Later this week', emptyText: 'Nothing else this week.' },
   { bucket: 'nextTwoWeeks', title: 'Next 2 weeks', emptyText: 'Clear for the next two weeks.' },
-  { bucket: 'later', title: 'Later', defaultOpen: false },
-  { bucket: 'noDate', title: 'No date', defaultOpen: false },
+  { bucket: 'later', title: 'Later', defaultOpen: false, hideWhenEmpty: true },
+  { bucket: 'noDate', title: 'No date', defaultOpen: false, hideWhenEmpty: true },
 ];
 
-export function Dashboard({ groups, categoriesById, now, selectedId, onOpen, onToggleDone }: Props) {
+export function Dashboard({ groups, ctx }: Props) {
   return (
     <>
-      {SECTIONS.map(({ bucket, title, emptyText, defaultOpen }) => {
+      {SECTIONS.map(({ bucket, title, hint, emptyText, defaultOpen, hideWhenEmpty }) => {
         const items = groups[bucket];
-        // Overdue only appears when it matters; the others always show, for a sense of the shape of the week.
-        if (bucket === 'overdue' && items.length === 0) return null;
-        if ((bucket === 'later' || bucket === 'noDate') && items.length === 0) return null;
+        // "From earlier" only appears when it matters; the near-term sections always show, to give the week a shape.
+        if (hideWhenEmpty && items.length === 0) return null;
         return (
-          <Section key={bucket} title={title} count={items.length} emptyText={emptyText}
-            tone={bucket === 'overdue' ? 'danger' : 'default'} defaultOpen={defaultOpen}>
-            {items.map((item) => (
-              <ItemRow key={item.id} item={item} category={categoriesById.get(item.category_id)} now={now}
-                selected={item.id === selectedId} onOpen={() => onOpen(item.id)} onToggleDone={() => onToggleDone(item)} />
-            ))}
+          <Section key={bucket} title={title} hint={hint} count={items.length} emptyText={emptyText}
+            tone={bucket === 'overdue' ? 'behind' : 'default'} defaultOpen={defaultOpen}>
+            {items.map((item) => <ItemRow key={item.id} item={item} ctx={ctx} />)}
           </Section>
         );
       })}

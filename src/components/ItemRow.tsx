@@ -3,32 +3,42 @@ import type { Category, Item } from '../lib/types';
 import { effectiveDue, formatDue, dayDiff } from '../lib/dates';
 import { CategoryChip, StatusPill } from './ui';
 
-interface Props {
-  item: Item;
-  category: Category | undefined;
+export interface RowContext {
+  categoriesById: Map<number, Category>;
   now: Date;
-  selected: boolean;
-  showCategory?: boolean;
-  onOpen: () => void;
-  onToggleDone: () => void;
+  selectedId: number | null;
+  /** Item currently under a file being dragged in, if any. */
+  dropTargetId: number | null;
+  onOpen: (id: number) => void;
+  onToggleDone: (item: Item) => void;
 }
 
-export function ItemRow({ item, category, now, selected, showCategory = true, onOpen, onToggleDone }: Props) {
+interface Props {
+  item: Item;
+  ctx: RowContext;
+  showCategory?: boolean;
+}
+
+export function ItemRow({ item, ctx, showCategory = true }: Props) {
+  const { now } = ctx;
   const done = item.status === 'done';
   const due = effectiveDue(item);
   const overdue = !done && due !== null && due < now;
   const dueToday = !done && !overdue && due !== null && dayDiff(now, due) === 0;
-  const dueColor = overdue ? 'text-danger' : dueToday ? 'text-accent' : 'text-muted';
+  const dueColor = overdue ? 'text-behind' : dueToday ? 'text-accent' : 'text-muted';
   const showStatus = item.status === 'in_progress' || item.status === 'waiting';
+  const selected = item.id === ctx.selectedId;
+  const dropTarget = item.id === ctx.dropTargetId;
 
   return (
     <div
       role="button"
       tabIndex={0}
-      onClick={onOpen}
-      onKeyDown={(e) => e.key === 'Enter' && onOpen()}
+      data-drop-item={item.id}
+      onClick={() => ctx.onOpen(item.id)}
+      onKeyDown={(e) => e.key === 'Enter' && ctx.onOpen(item.id)}
       className={`flex cursor-default items-center gap-3 px-4 py-2.5 outline-none transition-colors focus-visible:bg-surface-2 ${
-        selected ? 'bg-accent-soft' : 'hover:bg-surface-2'
+        dropTarget ? 'bg-accent-soft shadow-[inset_0_0_0_2px_var(--accent)]' : selected ? 'bg-accent-soft' : 'hover:bg-surface-2'
       }`}
     >
       <button
@@ -36,7 +46,7 @@ export function ItemRow({ item, category, now, selected, showCategory = true, on
         aria-label={done ? 'Mark as not done' : 'Mark as done'}
         onClick={(e) => {
           e.stopPropagation();
-          onToggleDone();
+          ctx.onToggleDone(item);
         }}
         className={`flex size-[18px] shrink-0 items-center justify-center rounded-full border-[1.5px] transition-colors ${
           done ? 'border-accent bg-accent text-surface' : 'border-muted/50 hover:border-accent'
@@ -63,7 +73,7 @@ export function ItemRow({ item, category, now, selected, showCategory = true, on
             {item.attachment_count}
           </span>
         )}
-        {showCategory && <CategoryChip category={category} />}
+        {showCategory && <CategoryChip category={ctx.categoriesById.get(item.category_id)} />}
         {due && <span className={`w-28 text-right text-xs tabular-nums ${dueColor}`}>{formatDue(item, now)}</span>}
       </div>
     </div>

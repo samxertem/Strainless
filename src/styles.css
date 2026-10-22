@@ -16,6 +16,15 @@
   --color-danger-soft: var(--danger-soft);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
+  /* Past-due items: a warm clay, deliberately not alarm red. */
+  --color-behind: var(--behind);
+  --color-behind-soft: var(--behind-soft);
+}
+
+/* Bundled with the app (via @fontsource), so they work offline. */
+@theme {
+  --font-hand: "Caveat", "Segoe Print", "Bradley Hand", cursive;
+  --font-serif: "Lora", Georgia, "Times New Roman", serif;
 }
 
 :root {
@@ -29,10 +38,12 @@
   --muted: #6e727a;
   --accent: #4d7d6c;
   --accent-soft: #e3eee9;
-  --danger: #b4493b;
-  --danger-soft: #f7e6e2;
-  --warn: #a8701c;
-  --warn-soft: #f6ecda;
+  --danger: #b0614f;
+  --danger-soft: #f6e9e4;
+  --warn: #a37a3a;
+  --warn-soft: #f5eddf;
+  --behind: #a8724f;
+  --behind-soft: #f4ebe3;
 }
 
 :root[data-theme="dark"] {
@@ -46,10 +57,12 @@
   --muted: #979ca4;
   --accent: #82b5a2;
   --accent-soft: #24332e;
-  --danger: #e2806f;
-  --danger-soft: #3a2522;
-  --warn: #d9a650;
-  --warn-soft: #362d1c;
+  --danger: #d9917f;
+  --danger-soft: #362725;
+  --warn: #d2ab6a;
+  --warn-soft: #332b1e;
+  --behind: #d6a383;
+  --behind-soft: #33291f;
 }
 
 html,
@@ -58,20 +71,120 @@ body,
   height: 100%;
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
 body {
   margin: 0;
   background: var(--canvas);
   color: var(--ink);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Chrome of the app (navigation, buttons) isn't selectable; content is. */
+button,
+nav,
+[role="button"] {
   user-select: none;
 }
 
-input,
-textarea,
-.notes-preview {
+/* ---- highlights (CSS Custom Highlight API, see src/lib/annotations.ts) ---- */
+::highlight(anno-yellow) { background-color: rgb(255 210 70 / 0.45); }
+::highlight(anno-green) { background-color: rgb(110 205 135 / 0.42); }
+::highlight(anno-pink) { background-color: rgb(245 135 185 / 0.40); }
+::highlight(anno-blue) { background-color: rgb(110 170 245 / 0.40); }
+::highlight(anno-starred) { text-decoration: underline 2px rgb(196 150 30); text-underline-offset: 3px; }
+::highlight(anno-active) { background-color: rgb(0 0 0 / 0.10); }
+
+/* ---- pdf.js text layer: invisible text over the page canvas, for selecting and highlighting.
+   Adapted from pdfjs-dist/web/pdf_viewer.css (only the parts this app uses). ---- */
+.pdf-page {
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+}
+.textLayer {
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: CanvasText;
+  z-index: 0;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+}
+.textLayer :is(span, br) {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
   user-select: text;
 }
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+  z-index: 1;
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+.textLayer .markedContent { display: contents; }
+.textLayer ::selection { background: rgb(0 90 255 / 0.25); color: transparent; }
+.textLayer br::selection { background: transparent; }
+.textLayer .endOfContent {
+  display: block;
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  cursor: default;
+  user-select: none;
+}
+.textLayer.selecting .endOfContent { top: 0; }
+
+/* ---- code blocks in markdown (highlight.js token classes, themed for light/dark) ---- */
+.notes-preview pre { position: relative; }
+.hljs-comment, .hljs-quote { color: var(--muted); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-built_in, .hljs-type { color: #8a5cc7; }
+.hljs-string, .hljs-attr, .hljs-regexp, .hljs-addition { color: #3d8a5c; }
+.hljs-number, .hljs-literal, .hljs-symbol, .hljs-bullet { color: #b8673a; }
+.hljs-title, .hljs-section, .hljs-function .hljs-title { color: #3a6fb5; }
+.hljs-meta, .hljs-variable, .hljs-template-variable { color: #a0558e; }
+.hljs-deletion { color: var(--danger); }
+:root[data-theme="dark"] .hljs-keyword, :root[data-theme="dark"] .hljs-selector-tag,
+:root[data-theme="dark"] .hljs-built_in, :root[data-theme="dark"] .hljs-type { color: #c3a2ef; }
+:root[data-theme="dark"] .hljs-string, :root[data-theme="dark"] .hljs-attr,
+:root[data-theme="dark"] .hljs-regexp, :root[data-theme="dark"] .hljs-addition { color: #8fd0a6; }
+:root[data-theme="dark"] .hljs-number, :root[data-theme="dark"] .hljs-literal,
+:root[data-theme="dark"] .hljs-symbol, :root[data-theme="dark"] .hljs-bullet { color: #e5a57b; }
+:root[data-theme="dark"] .hljs-title, :root[data-theme="dark"] .hljs-section { color: #8db7ec; }
+:root[data-theme="dark"] .hljs-meta, :root[data-theme="dark"] .hljs-variable { color: #dd9cc9; }
+.notes-preview .code-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--line);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.notes-preview pre:hover .code-copy { opacity: 1; }
+.notes-preview img { max-width: 100%; border-radius: 8px; }
 
 /* Rendered markdown. Tailwind's preflight strips all default element styles. */
 .notes-preview {
