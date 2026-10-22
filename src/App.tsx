@@ -8,6 +8,7 @@ import { groupByBucket } from './lib/buckets';
 import { dayDiff, formatLongDate, startOfWeek, toDateInput } from './lib/dates';
 import { useNow, useTheme } from './lib/hooks';
 import { useReminders } from './lib/reminders';
+import { indexNewFiles, type FileTextHit } from './lib/fileText';
 import { Sidebar, sameView, type View } from './components/Sidebar';
 import { QuickAdd } from './components/QuickAdd';
 import { Dashboard } from './components/Dashboard';
@@ -23,6 +24,7 @@ import { SettingsDialog } from './components/SettingsDialog';
 import { StarredList } from './components/StarredList';
 import { CourseView } from './components/course/CourseView';
 import { CourseDialog } from './components/course/CourseDialog';
+import { Preview } from './components/Preview';
 import type { RowContext } from './components/ItemRow';
 
 type Dialog = 'categories' | 'settings' | 'search' | 'new-course' | 'edit-course' | null;
@@ -48,6 +50,8 @@ export default function App() {
   const [attachmentsVersion, setAttachmentsVersion] = useState(0);
   const [journalVersion, setJournalVersion] = useState(0);
   const [courseVersion, setCourseVersion] = useState(0);
+  /** A search result inside a file: open it at that page and mark the words. */
+  const [textHit, setTextHit] = useState<{ hit: FileTextHit; query: string } | null>(null);
   const lastNonFocusView = useRef<View>({ kind: 'dashboard' });
   const quickAddRef = useRef<HTMLInputElement>(null);
   const theme = useTheme();
@@ -215,6 +219,18 @@ export default function App() {
   }, [sessions, courses, todayKey]);
 
   useReminders(items, categoriesById, settings, now);
+
+  // Read new PDFs and slides into the search index in the background, a few seconds
+  // after launch and whenever the number of files changes.
+  const fileCount = useMemo(
+    () => courses.reduce((n, c) => n + c.file_count, 0) + items.reduce((n, i) => n + i.attachment_count, 0),
+    [courses, items],
+  );
+  useEffect(() => {
+    if (!loaded) return;
+    const timer = window.setTimeout(indexNewFiles, 4000);
+    return () => window.clearTimeout(timer);
+  }, [loaded, fileCount]);
 
   // Leave views whose category or course no longer exists.
   useEffect(() => {
@@ -438,7 +454,15 @@ export default function App() {
             setDialog(null);
             navigate({ kind: 'journal', day });
           }}
-          onPickCourse={pickCourseHit} />
+          onPickCourse={pickCourseHit}
+          onPickFileText={(hit, query) => {
+            setDialog(null);
+            setTextHit({ hit, query });
+          }} />
+      )}
+      {textHit && (
+        <Preview files={[textHit.hit.file]} index={0} onIndexChange={() => {}} initialLocation={textHit.hit.location}
+          findText={textHit.query} onClose={() => setTextHit(null)} />
       )}
       {dialog === 'settings' && settings && (
         <SettingsDialog settings={settings} onChange={updateSettings} themePref={theme.pref} onThemeChange={theme.setPref}

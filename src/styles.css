@@ -98,6 +98,7 @@ nav,
 ::highlight(anno-blue) { background-color: rgb(110 170 245 / 0.40); }
 ::highlight(anno-starred) { text-decoration: underline 2px rgb(196 150 30); text-underline-offset: 3px; }
 ::highlight(anno-active) { background-color: rgb(0 0 0 / 0.10); }
+::highlight(search-hit) { background-color: rgb(250 160 60 / 0.55); }
 
 /* ---- pdf.js text layer: invisible text over the page canvas, for selecting and highlighting.
    Adapted from pdfjs-dist/web/pdf_viewer.css (only the parts this app uses). ---- */

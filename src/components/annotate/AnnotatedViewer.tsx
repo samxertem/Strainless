@@ -6,8 +6,8 @@ import { Copy, Highlighter, PanelRightClose, Star, StickyNote, Trash2 } from 'lu
 import type { Annotation, HighlightColor } from '../../lib/types';
 import { HIGHLIGHT_COLORS } from '../../lib/types';
 import {
-  anchorQuote, clearHighlights, createAnnotation, deleteAnnotation, describeRange, listAnnotations, paintHighlights,
-  updateAnnotation, type Quote,
+  anchorQuote, clearHighlights, createAnnotation, deleteAnnotation, describeRange, findTextRange, listAnnotations,
+  paintHighlights, paintSearchHit, updateAnnotation, type Quote,
 } from '../../lib/annotations';
 import { useDebouncedSave } from '../../lib/hooks';
 
@@ -38,8 +38,15 @@ interface Props {
   segmentLabel: string;
   /** Open on this highlight (from the Starred page). */
   initialAnnotationId?: number;
+  /** Open on this page/slide (0-based), e.g. from a search result… */
+  initialLocation?: number;
+  /** …and mark these words on it. */
+  findText?: string;
   children: ReactNode;
 }
+
+/** How long to keep waiting for a searched page to render before giving up on marking the words. */
+const FIND_TIMEOUT_MS = 8000;
 
 type Toolbar =
   | { mode: 'new'; quote: Quote; rect: DOMRect }
@@ -49,12 +56,15 @@ type Toolbar =
 /** Selection inside a Word document's shadow root isn't visible through document.getSelection(). */
 type SelectableRoot = ShadowRoot & { getSelection?: () => Selection | null };
 
-export function AnnotatedViewer({ fileRef, segmentLabel, initialAnnotationId, children }: Props) {
+export function AnnotatedViewer({ fileRef, segmentLabel, initialAnnotationId, initialLocation, findText, children }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const roots = useRef(new Set<ShadowRoot>());
   const ranges = useRef(new Map<number, Range>());
   const jumpHandler = useRef<((location: number) => void) | null>(null);
   const pendingJump = useRef<number | null>(initialAnnotationId ?? null);
+  const pendingFind = useRef<{ location: number; shown: boolean; until: number } | null>(
+    initialLocation !== undefined ? { location: initialLocation, shown: false, until: Date.now() + FIND_TIMEOUT_MS } : null,
+  );
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [toolbar, setToolbar] = useState<Toolbar>(null);
   const [activeId, setActiveId] = useState<number | null>(initialAnnotationId ?? null);
@@ -102,7 +112,23 @@ export function AnnotatedViewer({ fileRef, segmentLabel, initialAnnotationId, ch
       (node.nodeType === Node.TEXT_NODE ? node.parentElement : (node as Element))?.scrollIntoView({ block: 'center' });
       pendingJump.current = null;
     }
-  }, [annotations, activeId, layoutTick, findSegment]);
+    // Opening at a page: bring it into view first; once its text has rendered, mark the searched words.
+    const find = pendingFind.current;
+    const segment = find && findSegment(find.location);
+    if (find && segment) {
+      if (!find.shown) {
+        if (jumpHandler.current) jumpHandler.current(find.location);
+        else segment.scrollIntoView({ block: 'start' });
+        find.shown = true;
+      }
+      const hit = findText ? findTextRange(segment, findText) : null;
+      if (hit) {
+        paintSearchHit(hit);
+        (hit.startContainer.parentElement ?? segment).scrollIntoView({ block: 'center' });
+      }
+      if (hit || !findText || Date.now() > find.until) pendingFind.current = null;
+    }
+  }, [annotations, activeId, layoutTick, findSegment, findText]);
 
   useEffect(() => () => clearHighlights(), []);
 

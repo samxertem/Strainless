@@ -44,9 +44,12 @@ interface Props {
   onClose: () => void;
   /** Scroll to this highlight once the document is open (from the Starred page). */
   initialAnnotationId?: number;
+  /** Open the first file at this page/slide (0-based) and mark these words: a search result. */
+  initialLocation?: number;
+  findText?: string;
 }
 
-export function Preview({ files, index, onIndexChange, onClose, initialAnnotationId }: Props) {
+export function Preview({ files, index, onIndexChange, onClose, initialAnnotationId, initialLocation, findText }: Props) {
   const file = files[index];
   const kind = previewKind(file);
   const [error, setError] = useState<string | null>(null);
@@ -130,7 +133,8 @@ export function Preview({ files, index, onIndexChange, onClose, initialAnnotatio
       <div className="min-h-0 flex-1">
         <Suspense fallback={loading}>
           {kind && kind !== 'image' ? (
-            <AnnotatedViewer key={file.ref} fileRef={file.ref} segmentLabel={SEGMENT_LABEL[kind]} initialAnnotationId={initialAnnotationId}>
+            <AnnotatedViewer key={file.ref} fileRef={file.ref} segmentLabel={SEGMENT_LABEL[kind]} initialAnnotationId={initialAnnotationId}
+              initialLocation={index === 0 ? initialLocation : undefined} findText={index === 0 ? findText : undefined}>
               {viewer}
             </AnnotatedViewer>
           ) : (

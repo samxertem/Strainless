@@ -175,6 +175,40 @@ export function anchorQuote(segment: Element, q: Quote): Range | null {
   return range;
 }
 
+/** Lower case without accents, so "cap" matches "ÇAP" the way search does. */
+const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
+/**
+ * Finds a search query in a segment's text, ignoring case and accents: the whole
+ * phrase if it's there, otherwise its longest word. Used to mark a search hit.
+ */
+export function findTextRange(segment: Element, query: string): Range | null {
+  const index = indexText(segment);
+  // Fold one character at a time, remembering where each folded character came from.
+  let folded = '';
+  const origin: number[] = [];
+  for (let i = 0; i < index.text.length; i++) {
+    for (const c of fold(index.text[i])) {
+      folded += c;
+      origin.push(i);
+    }
+  }
+  const words = query.trim().split(/\s+/).filter(Boolean);
+  for (const candidate of [words.join(' '), ...[...words].sort((a, b) => b.length - a.length)]) {
+    const needle = fold(candidate);
+    const at = needle ? folded.indexOf(needle) : -1;
+    if (at < 0) continue;
+    const start = offsetToPoint(index, origin[at], false);
+    const end = offsetToPoint(index, origin[at + needle.length - 1] + 1, true);
+    if (!start || !end) continue;
+    const range = document.createRange();
+    range.setStart(start.node, start.offset);
+    range.setEnd(end.node, end.offset);
+    return range;
+  }
+  return null;
+}
+
 // ---------- painting ----------
 //
 // The CSS Custom Highlight API paints ranges without touching the DOM, which
@@ -191,9 +225,17 @@ export function paintHighlights(ranges: { range: Range; color: HighlightColor; s
   CSS.highlights.set('anno-active', active ? new Highlight(active) : new Highlight());
 }
 
+/** Marks the words a search result pointed at. */
+export function paintSearchHit(range: Range | null) {
+  if (!hasHighlightApi()) return;
+  CSS.highlights.set('search-hit', range ? new Highlight(range) : new Highlight());
+}
+
 export function clearHighlights() {
   if (!hasHighlightApi()) return;
-  for (const name of [...HIGHLIGHT_COLORS.map((c) => `anno-${c}`), 'anno-starred', 'anno-active']) CSS.highlights.delete(name);
+  for (const name of [...HIGHLIGHT_COLORS.map((c) => `anno-${c}`), 'anno-starred', 'anno-active', 'search-hit']) {
+    CSS.highlights.delete(name);
+  }
 }
 
 /** CSS for highlight colours; also injected into shadow roots (Word documents). */
@@ -204,4 +246,5 @@ export const HIGHLIGHT_CSS = `
   ::highlight(anno-blue) { background-color: rgb(110 170 245 / 0.40); }
   ::highlight(anno-starred) { text-decoration: underline 2px rgb(196 150 30); text-underline-offset: 3px; }
   ::highlight(anno-active) { background-color: rgb(0 0 0 / 0.10); }
+  ::highlight(search-hit) { background-color: rgb(250 160 60 / 0.55); }
 `;

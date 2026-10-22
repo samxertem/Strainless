@@ -701,6 +701,24 @@ async function readTheme(zip: JSZip, master: Part | null): Promise<Theme> {
   return theme;
 }
 
+/** Plain text of each slide (its own text plus speaker notes), for search. No images are decoded. */
+export async function readPptxText(data: ArrayBuffer): Promise<string[]> {
+  const zip = await JSZip.loadAsync(data);
+  const pres = await loadPart(zip, 'ppt/presentation.xml');
+  if (!pres) throw new Error('this file is not a PowerPoint presentation (.pptx)');
+  const texts: string[] = [];
+  for (const id of kids(path(pres.root, 'sldIdLst'), 'sldId')) {
+    const rid = id.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id') ?? id.getAttribute('r:id');
+    const rel = rid ? pres.rels.get(rid) : undefined;
+    const slide = rel ? await loadPart(zip, resolvePath('ppt/presentation.xml', rel.target)) : null;
+    if (!slide) continue;
+    const paragraphs = Array.from(slide.root.getElementsByTagNameNS('*', 'p'))
+      .map((p) => Array.from(p.getElementsByTagNameNS('*', 't')).map((t) => t.textContent).join(''));
+    texts.push([...paragraphs, await readNotes(zip, slide)].join('\n'));
+  }
+  return texts;
+}
+
 /** Reads a .pptx into slide models. Throws on files that aren't PowerPoint presentations. */
 export async function readPptx(data: ArrayBuffer): Promise<Deck> {
   const zip = await JSZip.loadAsync(data);

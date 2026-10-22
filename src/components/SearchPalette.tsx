@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { BookOpen, FileText, ListChecks, NotebookPen, Paperclip, Search } from 'lucide-react';
 import type { Category, CourseHit, Item, JournalHit, SearchHit } from '../lib/types';
 import { MARK_END, MARK_START } from '../lib/types';
 import * as db from '../lib/db';
 import { searchCourses } from '../lib/courses';
+import { indexProgress, searchFileText, type FileTextHit } from '../lib/fileText';
 import { formatDue } from '../lib/dates';
 import { CategoryChip, Marked, StatusPill } from './ui';
 import { FileIcon } from './FileIcon';
@@ -15,12 +16,15 @@ interface Props {
   onPick: (id: number) => void;
   onPickJournal: (day: string) => void;
   onPickCourse: (hit: CourseHit) => void;
+  /** A page or slide whose text matched; `query` is what to mark on it. */
+  onPickFileText: (hit: FileTextHit, query: string) => void;
   onClose: () => void;
 }
 
 type Result =
   | { type: 'item'; hit: SearchHit }
   | { type: 'course'; hit: CourseHit }
+  | { type: 'text'; hit: FileTextHit }
   | { type: 'journal'; hit: JournalHit };
 
 const COURSE_KIND_LABEL: Record<CourseHit['kind'], string> = { file: 'Library', topic: 'Topic', note: 'Note', quote: 'Quote' };
@@ -42,11 +46,13 @@ const stripMarkdown = (s: string) =>
     .replace(/\]\([^)]*\)?/g, '') // link targets, even when the snippet cut them off
     .replace(/[*_`#>[\]]+/g, ''); // emphasis, code, headings, quotes, brackets
 
-export function SearchPalette({ items, categoriesById, now, onPick, onPickJournal, onPickCourse, onClose }: Props) {
+export function SearchPalette({ items, categoriesById, now, onPick, onPickJournal, onPickCourse, onPickFileText, onClose }: Props) {
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [journalHits, setJournalHits] = useState<JournalHit[]>([]);
   const [courseHits, setCourseHits] = useState<CourseHit[]>([]);
+  const [textHits, setTextHits] = useState<FileTextHit[]>([]);
+  const indexing = useSyncExternalStore(indexProgress.subscribe, indexProgress.get);
   const [active, setActive] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
@@ -59,14 +65,16 @@ export function SearchPalette({ items, categoriesById, now, onPick, onPickJourna
       setHits([]);
       setJournalHits([]);
       setCourseHits([]);
+      setTextHits([]);
       return;
     }
     const timer = window.setTimeout(() => {
-      Promise.all([db.search(query), searchCourses(query), db.searchJournal(query)]).then(
-        ([itemHits, courseResults, pages]) => {
+      Promise.all([db.search(query), searchCourses(query), searchFileText(query), db.searchJournal(query)]).then(
+        ([itemHits, courseResults, textResults, pages]) => {
           if (id !== requestId.current) return; // a newer query is in flight; drop this stale response
           setHits(itemHits);
           setCourseHits(courseResults);
+          setTextHits(textResults);
           setJournalHits(pages);
           setError(null);
         },
@@ -76,7 +84,7 @@ export function SearchPalette({ items, categoriesById, now, onPick, onPickJourna
     return () => window.clearTimeout(timer);
   }, [query]);
 
-  useEffect(() => setActive(0), [hits, journalHits, courseHits, query]);
+  useEffect(() => setActive(0), [hits, journalHits, courseHits, textHits, query]);
 
   // With no query, show what was touched most recently: usually what you're looking for.
   const itemResults: SearchHit[] = query.trim()
@@ -88,10 +96,14 @@ export function SearchPalette({ items, categoriesById, now, onPick, onPickJourna
   const results: Result[] = [
     ...itemResults.map((hit) => ({ type: 'item' as const, hit })),
     ...(query.trim() ? courseHits.map((hit) => ({ type: 'course' as const, hit })) : []),
+    ...(query.trim() ? textHits.map((hit) => ({ type: 'text' as const, hit })) : []),
     ...(query.trim() ? journalHits.map((hit) => ({ type: 'journal' as const, hit })) : []),
   ];
   const pick = (r: Result) =>
-    r.type === 'item' ? onPick(r.hit.id) : r.type === 'course' ? onPickCourse(r.hit) : onPickJournal(r.hit.day);
+    r.type === 'item' ? onPick(r.hit.id)
+    : r.type === 'course' ? onPickCourse(r.hit)
+    : r.type === 'text' ? onPickFileText(r.hit, query)
+    : onPickJournal(r.hit.day);
   const firstOf = (type: Result['type']) => results.findIndex((r) => r.type === type);
 
   useEffect(() => {
@@ -146,6 +158,27 @@ export function SearchPalette({ items, categoriesById, now, onPick, onPickJourna
                 </div>
               );
             }
+            if (result.type === 'text') {
+              const h = result.hit;
+              return (
+                <div key={`t-${h.file.ref}-${h.location}`}>
+                  {index === firstOf('text') && (
+                    <div className="px-3 pt-3 pb-1 text-[11px] font-medium tracking-wide text-muted uppercase">Inside your files</div>
+                  )}
+                  <button type="button" data-index={index} onMouseMove={() => setActive(index)} onClick={() => pick(result)}
+                    className={`flex w-full flex-col gap-0.5 rounded-lg px-3 py-2 text-left ${index === active ? 'bg-accent-soft' : ''}`}>
+                    <div className="flex w-full items-center gap-2">
+                      <FileIcon name={h.file.name} size={14} tinted className="shrink-0" />
+                      <span className="min-w-0 flex-1 truncate text-sm text-ink">{h.file.name}</span>
+                      <span className="shrink-0 text-xs text-muted">
+                        {h.courseName && <>{h.courseName} · </>}{h.segmentLabel} {h.location + 1}
+                      </span>
+                    </div>
+                    <Marked text={h.snippet} className="line-clamp-2 pl-[22px] text-xs text-muted" />
+                  </button>
+                </div>
+              );
+            }
             if (result.type === 'journal') {
               const first = index === firstOf('journal');
               return (
@@ -196,7 +229,10 @@ export function SearchPalette({ items, categoriesById, now, onPick, onPickJourna
         </div>
 
         <div className="flex gap-4 border-t border-line px-4 py-2 text-[11px] text-muted">
-          <span>↑↓ to move</span><span>Enter to open</span><span>Typing “cap” also finds “ÇAP”</span>
+          <span>↑↓ to move</span><span>Enter to open</span>
+          {indexing
+            ? <span className="ml-auto">Reading your files for search… {indexing.done} of {indexing.total}</span>
+            : <span>Typing “cap” also finds “ÇAP”</span>}
         </div>
       </div>
     </div>
