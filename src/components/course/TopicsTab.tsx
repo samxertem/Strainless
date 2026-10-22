@@ -19,7 +19,7 @@ interface Props {
   onError: (message: string) => void;
 }
 
-const NEXT_STATUS: Record<TopicStatus, TopicStatus> = { todo: 'studying', studying: 'done', done: 'todo' };
+export const NEXT_STATUS: Record<TopicStatus, TopicStatus> = { todo: 'studying', studying: 'done', done: 'todo' };
 const STATUS_TITLE: Record<TopicStatus, string> = { todo: 'Not started', studying: 'Studying', done: 'Done' };
 
 export function TopicsTab({ course, refreshKey, dropKey, onChanged, onError }: Props) {
@@ -245,7 +245,7 @@ function TopicRow(p: RowProps) {
   );
 }
 
-function StatusButton({ status, color, onClick }: { status: TopicStatus; color: string; onClick: () => void }) {
+export function StatusButton({ status, color, onClick }: { status: TopicStatus; color: string; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} title={`${STATUS_TITLE[status]} (click to change)`}
       className="flex size-[20px] shrink-0 items-center justify-center rounded-full border-2 transition-colors"

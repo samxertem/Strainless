@@ -123,6 +123,7 @@ export async function deleteItem(id: number): Promise<void> {
   );
   await d.execute('DELETE FROM attachments WHERE item_id = $1', [id]);
   await d.execute('DELETE FROM reminders_sent WHERE item_id = $1', [id]);
+  await d.execute('DELETE FROM exam_topics WHERE item_id = $1', [id]);
   await d.execute('DELETE FROM items WHERE id = $1', [id]);
   // Rows first: a leftover folder is harmless, a row pointing at a deleted file is not.
   await deleteOwnerFiles('attachments', id);

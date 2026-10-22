@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import {
-  Archive, CalendarDays, CircleCheck, FolderOpen, Hourglass, LayoutDashboard, ListTodo, Monitor, Moon,
+  Archive, CalendarDays, CircleCheck, FolderOpen, GraduationCap, Hourglass, LayoutDashboard, ListTodo, Monitor, Moon,
   NotebookPen, Plus, Search, Settings, Settings2, Star, Sun, Sunrise,
 } from 'lucide-react';
 import type { Category, Course } from '../lib/types';
@@ -13,6 +13,7 @@ export type View =
   | { kind: 'focus' }
   | { kind: 'journal'; day: string }
   | { kind: 'calendar' }
+  | { kind: 'prep' }
   | { kind: 'all' }
   | { kind: 'waiting' }
   | { kind: 'completed' }
@@ -40,6 +41,8 @@ interface Props {
   activeCount: number;
   /** Items in today's focus list (due today + from earlier). */
   focusCount: number;
+  /** Exams coming up, for the Exam prep badge. */
+  examCount: number;
   todayKey: string;
   /** Days since the last backup, `null` if never; `undefined` hides the nudge. */
   backupAgeDays: number | null | undefined;
@@ -84,6 +87,8 @@ export function Sidebar(p: Props) {
           onClick={go({ kind: 'journal', day: p.todayKey })} />
         <NavItem icon={<CalendarDays size={15} />} label="Calendar" active={is({ kind: 'calendar' })}
           onClick={go({ kind: 'calendar' })} />
+        <NavItem icon={<GraduationCap size={15} />} label="Exam prep" active={is({ kind: 'prep' })}
+          badge={p.examCount} onClick={go({ kind: 'prep' })} />
         <NavItem icon={<ListTodo size={15} />} label="All items" active={is({ kind: 'all' })}
           badge={p.activeCount} onClick={go({ kind: 'all' })} />
         <NavItem icon={<Hourglass size={15} />} label="Waiting" active={is({ kind: 'waiting' })}

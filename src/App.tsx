@@ -9,6 +9,7 @@ import { dayDiff, formatLongDate, startOfWeek, toDateInput } from './lib/dates';
 import { useNow, useTheme } from './lib/hooks';
 import { useReminders } from './lib/reminders';
 import { indexNewFiles, type FileTextHit } from './lib/fileText';
+import { upcomingExams } from './lib/exams';
 import { Sidebar, sameView, type View } from './components/Sidebar';
 import { QuickAdd } from './components/QuickAdd';
 import { Dashboard } from './components/Dashboard';
@@ -22,6 +23,7 @@ import { CategoryManager } from './components/CategoryManager';
 import { SearchPalette } from './components/SearchPalette';
 import { SettingsDialog } from './components/SettingsDialog';
 import { StarredList } from './components/StarredList';
+import { ExamPrepView } from './components/ExamPrepView';
 import { CourseView } from './components/course/CourseView';
 import { CourseDialog } from './components/course/CourseDialog';
 import { Preview } from './components/Preview';
@@ -120,7 +122,7 @@ export default function App() {
       if (mod && key === 'n') {
         e.preventDefault();
         setDialog(null);
-        if (view.kind === 'focus' || view.kind === 'journal' || view.kind === 'starred') navigate({ kind: 'dashboard' });
+        if (['focus', 'journal', 'starred', 'prep'].includes(view.kind)) navigate({ kind: 'dashboard' });
         if (view.kind === 'course') navigate({ ...view, tab: 'tasks' });
         requestAnimationFrame(() => quickAddRef.current?.focus());
       } else if (mod && key === 'k') {
@@ -218,6 +220,8 @@ export default function App() {
     return coursesDb.classesBetween(sessions, courses, day, day);
   }, [sessions, courses, todayKey]);
 
+  const examCount = useMemo(() => upcomingExams(items, categoriesById, now).length, [items, categoriesById, now]);
+
   useReminders(items, categoriesById, settings, now);
 
   // Read new PDFs and slides into the search index in the background, a few seconds
@@ -289,6 +293,11 @@ export default function App() {
         onError={showError}
       />
     ) : null;
+  } else if (view.kind === 'prep') {
+    page = (
+      <ExamPrepView items={items} categoriesById={categoriesById} courses={courses} now={now} onOpenItem={setSelectedId}
+        onOpenCourse={openCourse} onChanged={() => void refresh()} onError={showError} />
+    );
   } else if (view.kind === 'starred') {
     page = (
       <div className="mx-auto max-w-4xl px-8 py-8">
@@ -393,6 +402,7 @@ export default function App() {
           waitingCount={activeItems.filter((i) => i.status === 'waiting').length}
           activeCount={activeItems.length}
           focusCount={groups.today.length}
+          examCount={examCount}
           todayKey={todayKey}
           backupAgeDays={backupAgeDays}
           themePref={theme.pref}
