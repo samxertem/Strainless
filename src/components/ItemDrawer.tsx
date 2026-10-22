@@ -18,6 +18,9 @@ interface Props {
   onDelete: () => void;
   onClose: () => void;
   onAttachmentsChanged: () => void;
+  attachmentsRefreshKey: number;
+  /** True while files are being dragged over this panel. */
+  isDropTarget: boolean;
 }
 
 const STATUS_OPTIONS = (Object.keys(STATUS_LABELS) as Status[]).map((value) => ({ value, label: STATUS_LABELS[value] }));
@@ -28,7 +31,9 @@ const PRIORITY_OPTIONS = ([1, 2, 3] as Priority[]).map((value) => ({ value, labe
  * (so a refresh never clobbers what you're typing) and save debounced; discrete
  * fields (status, dates…) save immediately.
  */
-export function ItemDrawer({ item, categories, courses, onSave, onDelete, onClose, onAttachmentsChanged }: Props) {
+export function ItemDrawer({
+  item, categories, courses, onSave, onDelete, onClose, onAttachmentsChanged, attachmentsRefreshKey, isDropTarget,
+}: Props) {
   const [title, setTitle] = useState(item.title);
   const [course, setCourse] = useState(item.course ?? '');
   const [notes, setNotes] = useState(item.notes_md);
@@ -57,7 +62,12 @@ export function ItemDrawer({ item, categories, courses, onSave, onDelete, onClos
   };
 
   return (
-    <aside className="flex w-[440px] shrink-0 flex-col border-l border-line bg-canvas">
+    <aside
+      data-drop-item={item.id}
+      className={`flex w-[440px] shrink-0 flex-col border-l bg-canvas transition-shadow ${
+        isDropTarget ? 'border-accent shadow-[inset_0_0_0_2px_var(--accent)]' : 'border-line'
+      }`}
+    >
       <div className="flex items-center justify-between px-5 pt-4 pb-2">
         <span className="text-xs text-muted">
           {item.status === 'done' && item.completed_at
@@ -152,7 +162,7 @@ export function ItemDrawer({ item, categories, courses, onSave, onDelete, onClos
           }}
         />
 
-        <Attachments itemId={item.id} onChanged={onAttachmentsChanged} />
+        <Attachments itemId={item.id} refreshKey={attachmentsRefreshKey} onChanged={onAttachmentsChanged} />
       </div>
     </aside>
   );

@@ -1,16 +1,19 @@
 import { useEffect, useState, type FormEvent, type RefObject } from 'react';
 import { Plus } from 'lucide-react';
 import type { Category, NewItem } from '../lib/types';
+import { MOD } from './ui';
 
 interface Props {
   categories: Category[];
   /** Category of the current view, if any; becomes the default for new items. */
   preferredCategoryId: number | null;
+  /** Course of the current view, if any; new items get it automatically. */
+  course: string | null;
   inputRef: RefObject<HTMLInputElement | null>;
   onAdd: (input: NewItem) => Promise<void>;
 }
 
-export function QuickAdd({ categories, preferredCategoryId, inputRef, onAdd }: Props) {
+export function QuickAdd({ categories, preferredCategoryId, course, inputRef, onAdd }: Props) {
   const [title, setTitle] = useState('');
   const [date, setDate] = useState('');
   const [categoryId, setCategoryId] = useState<number | null>(preferredCategoryId);
@@ -26,7 +29,7 @@ export function QuickAdd({ categories, preferredCategoryId, inputRef, onAdd }: P
     e.preventDefault();
     const trimmed = title.trim();
     if (!trimmed || chosen === null) return;
-    await onAdd({ title: trimmed, category_id: chosen, due_at: date || null, all_day: Boolean(date) });
+    await onAdd({ title: trimmed, category_id: chosen, course, due_at: date || null, all_day: Boolean(date) });
     setTitle('');
     setDate('');
   };
@@ -41,7 +44,7 @@ export function QuickAdd({ categories, preferredCategoryId, inputRef, onAdd }: P
         ref={inputRef}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="Add something… (Ctrl/⌘ N)"
+        placeholder={`Add something… (${MOD}N)`}
         className="min-w-0 flex-1 bg-transparent py-1 text-sm text-ink outline-none placeholder:text-muted/70"
       />
       <select

@@ -37,7 +37,7 @@ export function useTheme() {
     () => setPref((p) => (p === 'system' ? 'light' : p === 'light' ? 'dark' : 'system')),
     [],
   );
-  return { pref, cycle };
+  return { pref, setPref, cycle };
 }
 
 /** Current time, re-rendered every minute so "today"/"overdue" stay correct overnight. */

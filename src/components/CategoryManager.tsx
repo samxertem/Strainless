@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { ask } from '@tauri-apps/plugin-dialog';
-import { ArrowDown, ArrowUp, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Trash2 } from 'lucide-react';
 import type { Category } from '../lib/types';
 import { CATEGORY_COLORS } from '../lib/types';
 import * as db from '../lib/db';
-import { inputClass } from './ui';
+import { Modal, inputClass } from './ui';
 
 interface Props {
   categories: Category[];
@@ -33,19 +33,21 @@ export function CategoryManager({ categories, itemCounts, run, onClose }: Props)
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-6" onClick={onClose}>
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[85vh] w-[540px] flex-col overflow-hidden rounded-2xl border border-line bg-canvas shadow-2xl"
-      >
-        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
-          <h2 className="text-[15px] font-semibold text-ink">Categories</h2>
-          <button type="button" onClick={onClose} className="rounded-md p-1 text-muted hover:bg-surface-2 hover:text-ink">
-            <X size={16} />
+    <Modal
+      title="Categories"
+      onClose={onClose}
+      footer={
+        <form onSubmit={add} className="flex gap-2">
+          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New category name"
+            className={inputClass} />
+          <button type="submit" disabled={!newName.trim()}
+            className="shrink-0 rounded-lg bg-accent px-3.5 text-sm font-medium text-surface disabled:opacity-40">
+            Add
           </button>
-        </div>
-
-        <ul className="flex-1 overflow-y-auto px-3 py-2">
+        </form>
+      }
+    >
+        <ul className="px-3 py-2">
           {categories.map((cat, i) => (
             <CategoryRow
               key={cat.id}
@@ -59,17 +61,7 @@ export function CategoryManager({ categories, itemCounts, run, onClose }: Props)
             />
           ))}
         </ul>
-
-        <form onSubmit={add} className="flex gap-2 border-t border-line px-5 py-3.5">
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New category name"
-            className={inputClass} />
-          <button type="submit" disabled={!newName.trim()}
-            className="shrink-0 rounded-lg bg-accent px-3.5 text-sm font-medium text-surface disabled:opacity-40">
-            Add
-          </button>
-        </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
