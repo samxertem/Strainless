@@ -80,6 +80,8 @@ export interface Settings {
   /** Timed items: 1 h before. All-day items: 09:00 on the day. */
   remindSameDay: boolean;
   lastBackupAt: string | null;
+  /** Folder for the weekly automatic backup; null = off. */
+  autoBackupDir: string | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -87,6 +89,7 @@ export const DEFAULT_SETTINGS: Settings = {
   remindDayBefore: true,
   remindSameDay: true,
   lastBackupAt: null,
+  autoBackupDir: null,
 };
 
 /** Search fields contain MARK_START/MARK_END around matched words. */

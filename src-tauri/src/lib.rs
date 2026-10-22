@@ -60,6 +60,7 @@ pub fn run() {
             backup::write_backup,
             backup::inspect_backup,
             backup::restore_backup,
+            backup::prune_auto_backups,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Strainless");

@@ -10,6 +10,7 @@ import { useNow, useTheme } from './lib/hooks';
 import { useReminders } from './lib/reminders';
 import { indexNewFiles, type FileTextHit } from './lib/fileText';
 import { upcomingExams } from './lib/exams';
+import { autoBackupDue, runAutoBackup } from './lib/autoBackup';
 import { Sidebar, sameView, type View } from './components/Sidebar';
 import { QuickAdd } from './components/QuickAdd';
 import { Dashboard } from './components/Dashboard';
@@ -106,12 +107,37 @@ export default function App() {
     });
   }, []);
 
-  const updateSettings = (patch: Partial<Settings>) => {
-    if (!settings) return;
-    const next = { ...settings, ...patch };
+  // Through a ref, so a patch from async work (a finished backup) never overwrites newer settings.
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+  const updateSettings = useCallback((patch: Partial<Settings>) => {
+    const current = settingsRef.current;
+    if (!current) return;
+    const next = { ...current, ...patch };
+    settingsRef.current = next;
     setSettings(next);
     db.saveSettings(next).catch((e) => setError(String(e)));
-  };
+  }, []);
+
+  // Weekly automatic backup, shortly after launch so it doesn't slow down opening the app.
+  // A failure is reported once and retried on the next launch, not every minute.
+  const [backupRunning, setBackupRunning] = useState(false);
+  const autoBackupFailed = useRef(false);
+  useEffect(() => {
+    if (!loaded || !settings || backupRunning || autoBackupFailed.current || !autoBackupDue(settings, now)) return;
+    const dir = settings.autoBackupDir!;
+    const timer = window.setTimeout(() => {
+      setBackupRunning(true);
+      runAutoBackup(dir)
+        .then((m) => updateSettings({ lastBackupAt: m.created_at }))
+        .catch((e) => {
+          autoBackupFailed.current = true;
+          setError(`The weekly backup couldn’t be saved to ${dir}: ${e}. Strainless will try again next time it opens.`);
+        })
+        .finally(() => setBackupRunning(false));
+    }, 15_000);
+    return () => window.clearTimeout(timer);
+  }, [loaded, settings, now, backupRunning, updateSettings]);
 
   // App-wide shortcuts. Modals handle their own Escape (capture phase), so here it
   // closes the item panel first, then leaves Today mode.
@@ -405,6 +431,7 @@ export default function App() {
           examCount={examCount}
           todayKey={todayKey}
           backupAgeDays={backupAgeDays}
+          backupRunning={backupRunning}
           themePref={theme.pref}
           onCycleTheme={theme.cycle}
           onSearch={() => setDialog('search')}

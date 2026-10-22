@@ -46,6 +46,8 @@ interface Props {
   todayKey: string;
   /** Days since the last backup, `null` if never; `undefined` hides the nudge. */
   backupAgeDays: number | null | undefined;
+  /** The weekly automatic backup is being written. */
+  backupRunning: boolean;
   themePref: ThemePref;
   onCycleTheme: () => void;
   onSearch: () => void;
@@ -129,7 +131,11 @@ export function Sidebar(p: Props) {
         ))}
       </nav>
 
-      {p.backupAgeDays !== undefined && (p.backupAgeDays === null || p.backupAgeDays >= 7) && (
+      {p.backupRunning ? (
+        <div className="mx-2.5 mb-2 flex items-center gap-2 px-2.5 py-2 text-xs text-muted">
+          <Archive size={14} className="shrink-0 animate-pulse" /> Backing up…
+        </div>
+      ) : p.backupAgeDays !== undefined && (p.backupAgeDays === null || p.backupAgeDays >= 7) && (
         <button type="button" onClick={p.onSettings}
           className="mx-2.5 mb-2 flex items-center gap-2 rounded-lg bg-warn-soft px-2.5 py-2 text-left text-xs text-warn">
           <Archive size={14} className="shrink-0" />

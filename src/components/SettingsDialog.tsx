@@ -7,6 +7,7 @@ import type { Category, Course, CourseSession, Item, Settings } from '../lib/typ
 import type { ThemePref } from '../lib/hooks';
 import * as db from '../lib/db';
 import { buildIcs } from '../lib/ics';
+import { AUTO_BACKUPS_KEPT } from '../lib/autoBackup';
 import { toDateInput } from '../lib/dates';
 import { ensureNotificationPermission } from '../lib/reminders';
 import { Button, Modal, Segmented } from './ui';
@@ -89,6 +90,12 @@ export function SettingsDialog({
 
   const lastBackup = settings.lastBackupAt ? fullDate.format(new Date(settings.lastBackupAt)) : 'Never';
 
+  const pickAutoBackupFolder = () =>
+    attempt('folder', async () => {
+      const dir = await open({ title: 'Choose a folder for weekly backups', directory: true, multiple: false });
+      if (dir && !Array.isArray(dir)) onChange({ autoBackupDir: dir });
+    });
+
   return (
     <Modal title="Settings" onClose={onClose} width="w-[600px]">
       <div className="divide-y divide-line">
@@ -118,6 +125,19 @@ export function SettingsDialog({
             <Button onClick={restoreBackup} disabled={busy !== null}>
               <RotateCcw size={14} /> {busy === 'restore' ? 'Restoring…' : 'Restore from backup…'}
             </Button>
+          </div>
+          <div className="mt-4">
+            <Toggle checked={settings.autoBackupDir !== null}
+              onChange={(on) => (on ? pickAutoBackupFolder() : onChange({ autoBackupDir: null }))}
+              label="Back up automatically every week"
+              detail={`Keeps the ${AUTO_BACKUPS_KEPT} newest. A folder inside OneDrive or Google Drive keeps a copy off this computer too.`} />
+            {settings.autoBackupDir && (
+              <div className="mt-2 ml-12 flex items-center gap-2 text-xs">
+                <FolderOpen size={13} className="shrink-0 text-muted" />
+                <span className="min-w-0 truncate text-ink" title={settings.autoBackupDir}>{settings.autoBackupDir}</span>
+                <button type="button" onClick={pickAutoBackupFolder} className="shrink-0 font-medium text-accent hover:underline">Change…</button>
+              </div>
+            )}
           </div>
         </Group>
 

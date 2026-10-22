@@ -27,6 +27,11 @@ const COURSES: &str = "courses";
 const FILE_DIRS: [&str; 3] = [ATTACHMENTS, JOURNAL, COURSES];
 const SNAPSHOT: &str = "backup-snapshot.db";
 const MANIFEST: &str = "manifest.json";
+/// Automatic backups are named `Strainless-auto-YYYY-MM-DD.zip`; only these are ever pruned.
+const AUTO_PREFIX: &str = "Strainless-auto-";
+/// Formats that are already compressed: deflating them again costs time and saves nothing.
+const STORED_EXTENSIONS: [&str; 14] =
+    ["pdf", "pptx", "docx", "xlsx", "zip", "rar", "7z", "jpg", "jpeg", "png", "gif", "webp", "heic", "mp4"];
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Manifest {
@@ -56,9 +61,20 @@ pub fn backup_snapshot_path(app: AppHandle) -> Result<String, String> {
     Ok(path.to_string_lossy().into_owned())
 }
 
+/// Async and on a blocking thread: zipping a whole library takes seconds, and a
+/// synchronous command would freeze the window meanwhile.
 #[tauri::command]
-pub fn write_backup(app: AppHandle, dest: String, manifest: Manifest) -> Result<(), String> {
-    write_backup_from(&data_dir(&app)?, Path::new(&dest), &manifest)
+pub async fn write_backup(app: AppHandle, dest: String, manifest: Manifest) -> Result<(), String> {
+    let dir = data_dir(&app)?;
+    tauri::async_runtime::spawn_blocking(move || write_backup_from(&dir, Path::new(&dest), &manifest))
+        .await
+        .map_err(err)?
+}
+
+/// Deletes all but the newest `keep` automatic backups in `dir`. Returns how many were removed.
+#[tauri::command]
+pub fn prune_auto_backups(dir: String, keep: usize) -> Result<usize, String> {
+    prune_auto_backups_in(Path::new(&dir), keep)
 }
 
 /// Validates a backup and returns its manifest, so the UI can show what's in it before restoring.
@@ -110,6 +126,31 @@ fn write_backup_from(dir: &Path, dest: &Path, manifest: &Manifest) -> Result<(),
     result
 }
 
+/// `Strainless-auto-2026-10-22.zip` → true. Anything else in the folder is left alone.
+fn is_auto_backup(name: &str) -> bool {
+    let Some(date) = name.strip_prefix(AUTO_PREFIX).and_then(|rest| rest.strip_suffix(".zip")) else {
+        return false;
+    };
+    date.len() == 10 && date.chars().enumerate().all(|(i, c)| if i == 4 || i == 7 { c == '-' } else { c.is_ascii_digit() })
+}
+
+fn prune_auto_backups_in(dir: &Path, keep: usize) -> Result<usize, String> {
+    let mut names: Vec<String> = fs::read_dir(dir)
+        .map_err(err)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().map(|t| t.is_file()).unwrap_or(false))
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| is_auto_backup(n))
+        .collect();
+    names.sort_unstable_by(|a, b| b.cmp(a)); // dates sort as text: newest first
+    let mut removed = 0;
+    for name in names.iter().skip(keep) {
+        fs::remove_file(dir.join(name)).map_err(err)?;
+        removed += 1;
+    }
+    Ok(removed)
+}
+
 fn add_dir<W: Write + io::Seek>(
     zip: &mut ZipWriter<W>,
     dir: &Path,
@@ -122,6 +163,12 @@ fn add_dir<W: Write + io::Seek>(
         if entry.file_type().map_err(err)?.is_dir() {
             add_dir(zip, &entry.path(), &name, options)?;
         } else {
+            let ext = entry.path().extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+            let options = if STORED_EXTENSIONS.contains(&ext.as_str()) {
+                options.compression_method(CompressionMethod::Stored)
+            } else {
+                options
+            };
             zip.start_file(name, options).map_err(err)?;
             io::copy(&mut File::open(entry.path()).map_err(err)?, zip).map_err(err)?;
         }
@@ -359,6 +406,39 @@ mod tests {
         assert!(!data.join("escaped.txt").exists());
         assert!(!data.join("escaped2.txt").exists());
         assert!(!live.join("unexpected").exists());
+    }
+
+    #[test]
+    fn pruning_keeps_the_newest_auto_backups_and_nothing_else_is_touched() {
+        let dir = temp_dir("prune");
+        for day in ["2026-09-01", "2026-09-08", "2026-09-15", "2026-09-22", "2026-09-29", "2026-10-06"] {
+            write(&dir.join(format!("Strainless-auto-{day}.zip")), day);
+        }
+        write(&dir.join("Strainless-backup-2026-08-01.zip"), "manual");
+        write(&dir.join("Strainless-auto-notes.zip"), "not a dated backup");
+        write(&dir.join("thesis.docx"), "precious");
+
+        assert_eq!(prune_auto_backups_in(&dir, 4).unwrap(), 2);
+        assert!(!dir.join("Strainless-auto-2026-09-01.zip").exists());
+        assert!(!dir.join("Strainless-auto-2026-09-08.zip").exists());
+        for day in ["2026-09-15", "2026-09-22", "2026-09-29", "2026-10-06"] {
+            assert!(dir.join(format!("Strainless-auto-{day}.zip")).exists(), "{day} is one of the newest four");
+        }
+        assert!(dir.join("Strainless-backup-2026-08-01.zip").exists());
+        assert!(dir.join("Strainless-auto-notes.zip").exists());
+        assert!(dir.join("thesis.docx").exists());
+    }
+
+    #[test]
+    fn already_compressed_files_are_stored_not_deflated() {
+        let data = temp_dir("stored");
+        write(&data.join(SNAPSHOT), "db");
+        write(&data.join("courses/1/slides.PDF"), "pdf bytes");
+        let zip_path = data.join("b.zip");
+        write_backup_from(&data, &zip_path, &manifest(1)).unwrap();
+        let mut archive = ZipArchive::new(File::open(&zip_path).unwrap()).unwrap();
+        assert_eq!(archive.by_name("courses/1/slides.PDF").unwrap().compression(), CompressionMethod::Stored);
+        assert_eq!(archive.by_name(DB_FILE).unwrap().compression(), CompressionMethod::Deflated);
     }
 
     #[test]
