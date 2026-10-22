@@ -1,20 +1,9 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Minus, Plus } from 'lucide-react';
-import * as pdfjs from 'pdfjs-dist';
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { PDF_ASSETS, pdfjs } from '../lib/pdfjs';
 import { useAnnotationHost } from './annotate/AnnotatedViewer';
-
-pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-
-// Copied into public/ by scripts/copy-pdfjs-assets.mjs. Trailing slashes are required.
-const ASSETS = {
-  cMapUrl: '/pdfjs/cmaps/',
-  cMapPacked: true,
-  standardFontDataUrl: '/pdfjs/standard_fonts/',
-  wasmUrl: '/pdfjs/wasm/',
-  iccUrl: '/pdfjs/iccs/',
-};
+import { PageJump, useSegmentNav } from './PageJump';
 
 const ZOOM_STEPS = [0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 3];
 const MAX_FIT_WIDTH = 1000;
@@ -46,7 +35,7 @@ export function PdfViewer({ load, fileKey }: Props) {
       try {
         const data = await loadRef.current();
         if (cancelled) return;
-        task = pdfjs.getDocument({ data: new Uint8Array(data), ...ASSETS });
+        task = pdfjs.getDocument({ data: new Uint8Array(data), ...PDF_ASSETS });
         const opened = await task.promise;
         if (cancelled) return;
         const first = (await opened.getPage(1)).getViewport({ scale: 1 });
@@ -72,6 +61,7 @@ export function PdfViewer({ load, fileKey }: Props) {
 
   const zoom = ZOOM_STEPS[zoomIndex];
   const pageWidth = Math.round(fitWidth * zoom);
+  const nav = useSegmentNav(scroller, doc ? doc.numPages : 0);
 
   return (
     <div className="relative h-full">
@@ -104,7 +94,7 @@ export function PdfViewer({ load, fileKey }: Props) {
             className="rounded-full p-1.5 hover:bg-white/15 disabled:opacity-30" title="Zoom in">
             <Plus size={13} />
           </button>
-          <span className="border-l border-white/20 pr-2 pl-3 text-white/70">{doc.numPages} pages</span>
+          <PageJump current={nav.current} total={doc.numPages} label="Page" onJump={nav.jumpTo} />
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ChevronDown, Minus, Plus } from 'lucide-react';
 import { readPptx, type Deck, type Paragraph, type ShapeModel, type TextBody } from '../lib/pptx';
 import { useAnnotationHost } from './annotate/AnnotatedViewer';
+import { PageJump, useSegmentNav } from './PageJump';
 
 interface Props {
   load: () => Promise<ArrayBuffer>;
@@ -53,6 +54,7 @@ export function SlidesViewer({ load, fileKey }: Props) {
   }, []);
 
   const width = Math.round(fitWidth * ZOOM_STEPS[zoomIndex]);
+  const nav = useSegmentNav(scroller, deck && width > 0 ? deck.slides.length : 0, 32); // room for the "Slide n" label
   useEffect(() => {
     if (deck) host?.layoutChanged();
   }, [deck, width, host]);
@@ -94,7 +96,7 @@ export function SlidesViewer({ load, fileKey }: Props) {
           <button type="button" onClick={() => setZoomIndex((z) => Math.min(ZOOM_STEPS.length - 1, z + 1))}
             disabled={zoomIndex === ZOOM_STEPS.length - 1}
             className="rounded-full p-1.5 hover:bg-white/15 disabled:opacity-30" title="Zoom in"><Plus size={13} /></button>
-          <span className="border-l border-white/20 pr-2 pl-3 text-white/70">{deck.slides.length} slides</span>
+          <PageJump current={nav.current} total={deck.slides.length} label="Slide" onJump={nav.jumpTo} />
         </div>
       )}
     </div>

@@ -60,7 +60,8 @@ export function Preview({ files, index, onIndexChange, onClose, initialAnnotatio
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const typing = (e.target as HTMLElement | null)?.closest('input, textarea, [contenteditable="true"]');
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape' && typing?.matches('[data-page-jump]')) (typing as HTMLElement).blur();
+      else if (e.key === 'Escape') onClose();
       else if (!typing && e.key === 'ArrowLeft' && files.length > 1) go(-1);
       else if (!typing && e.key === 'ArrowRight' && files.length > 1) go(1);
       else return;
