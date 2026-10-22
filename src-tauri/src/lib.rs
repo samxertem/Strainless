@@ -1,3 +1,4 @@
+mod backup;
 mod files;
 
 use tauri_plugin_sql::{Migration, MigrationKind};
@@ -5,14 +6,30 @@ use tauri_plugin_sql::{Migration, MigrationKind};
 /// Must match the URL the frontend passes to `Database.load` (src/lib/db.ts).
 const DB_URL: &str = "sqlite:strainless.db";
 
+/// Migrations are append-only: never edit one that has shipped. sqlx stores a
+/// checksum of each applied migration and refuses to start if the file changes.
+const MIGRATIONS: &[(i64, &str, &str)] = &[
+    (1, "initial schema", include_str!("../migrations/001_init.sql")),
+    (2, "full-text search", include_str!("../migrations/002_search.sql")),
+    (3, "settings and reminders", include_str!("../migrations/003_settings_reminders.sql")),
+    (4, "journal and soft colours", include_str!("../migrations/004_journal_soft_colors.sql")),
+    (5, "courses, library, highlights", include_str!("../migrations/005_courses_highlights.sql")),
+];
+
+/// Highest schema version this build understands; backups from newer builds are refused.
+pub(crate) const LATEST_SCHEMA: i64 = MIGRATIONS[MIGRATIONS.len() - 1].0;
+
+#[tauri::command]
+fn latest_schema_version() -> i64 {
+    LATEST_SCHEMA
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let migrations = vec![Migration {
-        version: 1,
-        description: "initial schema",
-        sql: include_str!("../migrations/001_init.sql"),
-        kind: MigrationKind::Up,
-    }];
+    let migrations = MIGRATIONS
+        .iter()
+        .map(|&(version, description, sql)| Migration { version, description, sql, kind: MigrationKind::Up })
+        .collect();
 
     tauri::Builder::default()
         .plugin(
@@ -22,12 +39,25 @@ pub fn run() {
         )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
-            files::import_attachment,
-            files::open_attachment,
-            files::delete_attachment_file,
-            files::delete_item_files,
+            latest_schema_version,
+            files::import_file,
+            files::import_bytes,
+            files::file_path,
+            files::read_file,
+            files::open_file,
+            files::delete_file,
+            files::delete_owner_files,
             files::open_data_folder,
+            files::write_calendar_file,
+            files::import_journal_photo,
+            files::journal_photo_path,
+            files::delete_journal_photo,
+            backup::backup_snapshot_path,
+            backup::write_backup,
+            backup::inspect_backup,
+            backup::restore_backup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Strainless");
