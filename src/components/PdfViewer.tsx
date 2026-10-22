@@ -4,6 +4,7 @@ import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from 'pdfjs
 import { PDF_ASSETS, pdfjs } from '../lib/pdfjs';
 import { useAnnotationHost } from './annotate/AnnotatedViewer';
 import { PageJump, useSegmentNav } from './PageJump';
+import { InkLayer } from './annotate/Ink';
 
 const ZOOM_STEPS = [0.5, 0.67, 0.8, 1, 1.25, 1.5, 2, 3];
 const MAX_FIT_WIDTH = 1000;
@@ -186,6 +187,7 @@ function PdfPage({ doc, pageNumber, width, aspect, root }: PageProps) {
       style={{ width, height: height ?? width * aspect }}>
       <canvas ref={canvas} className="absolute inset-0 block h-full w-full" />
       <div ref={textLayer} className="textLayer" />
+      <InkLayer location={pageNumber - 1} />
     </div>
   );
 }

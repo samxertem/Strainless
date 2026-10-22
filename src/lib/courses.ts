@@ -42,10 +42,12 @@ export async function updateCourse(course: Course, fields: CourseFields): Promis
 /** Removes the course, its topics, notes, library files and their highlights. Tasks stay, without a course. */
 export async function deleteCourse(course: Course): Promise<void> {
   const d = await db();
-  await d.execute(
-    `DELETE FROM annotations WHERE file_ref IN (SELECT 'course_file:' || id FROM course_files WHERE course_id = $1)`,
-    [course.id],
-  );
+  for (const table of ['annotations', 'ink_strokes']) {
+    await d.execute(
+      `DELETE FROM ${table} WHERE file_ref IN (SELECT 'course_file:' || id FROM course_files WHERE course_id = $1)`,
+      [course.id],
+    );
+  }
   await d.execute('DELETE FROM courses WHERE id = $1', [course.id]); // cascades to topics, files, notes, sessions
   await d.execute('UPDATE items SET course = NULL WHERE course = $1', [course.name]);
   await deleteOwnerFiles('courses', course.id);
@@ -218,6 +220,7 @@ export async function moveCourseFile(id: number, topicId: number | null): Promis
 export async function deleteCourseFile(f: CourseFile): Promise<void> {
   const d = await db();
   await d.execute('DELETE FROM annotations WHERE file_ref = $1', [`course_file:${f.id}`]);
+  await d.execute('DELETE FROM ink_strokes WHERE file_ref = $1', [`course_file:${f.id}`]);
   await d.execute('DELETE FROM course_files WHERE id = $1', [f.id]);
   await deleteFile('courses', f.course_id, f.stored_name);
 }

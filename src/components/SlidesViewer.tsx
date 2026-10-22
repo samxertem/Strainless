@@ -3,6 +3,7 @@ import { ChevronDown, Minus, Plus } from 'lucide-react';
 import { readPptx, type Deck, type Paragraph, type ShapeModel, type TextBody } from '../lib/pptx';
 import { useAnnotationHost } from './annotate/AnnotatedViewer';
 import { PageJump, useSegmentNav } from './PageJump';
+import { InkLayer } from './annotate/Ink';
 
 interface Props {
   load: () => Promise<ArrayBuffer>;
@@ -76,6 +77,7 @@ export function SlidesViewer({ load, fileKey }: Props) {
                     style={{ width: deck.width, height: deck.height, transform: `scale(${width / deck.width})`, background: slide.background }}
                   >
                     {slide.shapes.map((shape, j) => <ShapeView key={j} shape={shape} />)}
+                    <InkLayer location={i} />
                   </div>
                 </div>
                 {slide.notes && <SpeakerNotes text={slide.notes} />}

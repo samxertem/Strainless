@@ -134,7 +134,8 @@ export function Preview({ files, index, onIndexChange, onClose, initialAnnotatio
         <Suspense fallback={loading}>
           {kind && kind !== 'image' ? (
             <AnnotatedViewer key={file.ref} fileRef={file.ref} segmentLabel={SEGMENT_LABEL[kind]} initialAnnotationId={initialAnnotationId}
-              initialLocation={index === 0 ? initialLocation : undefined} findText={index === 0 ? findText : undefined}>
+              initialLocation={index === 0 ? initialLocation : undefined} findText={index === 0 ? findText : undefined}
+              ink={kind === 'pdf' || kind === 'slides'}>
               {viewer}
             </AnnotatedViewer>
           ) : (

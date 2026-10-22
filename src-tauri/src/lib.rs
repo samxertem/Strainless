@@ -16,6 +16,7 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[
     (5, "courses, library, highlights", include_str!("../migrations/005_courses_highlights.sql")),
     (6, "text inside files", include_str!("../migrations/006_file_text.sql")),
     (7, "exam topics", include_str!("../migrations/007_exam_topics.sql")),
+    (8, "pen drawings", include_str!("../migrations/008_ink.sql")),
 ];
 
 /// Highest schema version this build understands; backups from newer builds are refused.

@@ -157,6 +157,7 @@ export function SettingsDialog({
               ['Ctrl/⌘ ,', 'Settings'],
               ['Esc', 'Close the open panel'],
               ['← →', 'Previous / next file in preview'],
+              ['Ctrl/⌘ Z', 'Undo the last pen line (while the pen is out)'],
             ].map(([key, what]) => (
               <div key={key} className="contents">
                 <dt><kbd className="rounded border border-line bg-surface px-1.5 py-0.5 text-xs text-ink">{key}</kbd></dt>

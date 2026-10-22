@@ -2,7 +2,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent,
   type ReactNode,
 } from 'react';
-import { Copy, Highlighter, PanelRightClose, Star, StickyNote, Trash2 } from 'lucide-react';
+import { Copy, Highlighter, PanelRightClose, PenLine, Star, StickyNote, Trash2 } from 'lucide-react';
 import type { Annotation, HighlightColor } from '../../lib/types';
 import { HIGHLIGHT_COLORS } from '../../lib/types';
 import {
@@ -10,6 +10,7 @@ import {
   paintHighlights, paintSearchHit, updateAnnotation, type Quote,
 } from '../../lib/annotations';
 import { useDebouncedSave } from '../../lib/hooks';
+import { InkProvider, useInkController } from './Ink';
 
 /** What a viewer can tell the highlight layer. */
 export interface AnnotationHost {
@@ -42,6 +43,8 @@ interface Props {
   initialLocation?: number;
   /** …and mark these words on it. */
   findText?: string;
+  /** Offer the pen (PDFs and slides, whose viewers put an InkLayer on each page). */
+  ink?: boolean;
   children: ReactNode;
 }
 
@@ -56,7 +59,7 @@ type Toolbar =
 /** Selection inside a Word document's shadow root isn't visible through document.getSelection(). */
 type SelectableRoot = ShadowRoot & { getSelection?: () => Selection | null };
 
-export function AnnotatedViewer({ fileRef, segmentLabel, initialAnnotationId, initialLocation, findText, children }: Props) {
+export function AnnotatedViewer({ fileRef, segmentLabel, initialAnnotationId, initialLocation, findText, ink, children }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const roots = useRef(new Set<ShadowRoot>());
   const ranges = useRef(new Map<number, Range>());
@@ -71,6 +74,8 @@ export function AnnotatedViewer({ fileRef, segmentLabel, initialAnnotationId, in
   const [panelOpen, setPanelOpen] = useState(initialAnnotationId !== undefined);
   const [layoutTick, setLayoutTick] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const showError = useCallback((message: string) => setError(message), []);
+  const pen = useInkController({ fileRef, onError: showError });
 
   const reload = useCallback(async () => {
     try {
@@ -182,7 +187,7 @@ export function AnnotatedViewer({ fileRef, segmentLabel, initialAnnotationId, in
   };
 
   const onMouseUp = (e: ReactMouseEvent) => {
-    if ((e.target as HTMLElement).closest('[data-anno-ui]')) return;
+    if ((e.target as Element).closest('[data-anno-ui], [data-ink]')) return;
     const point = { x: e.clientX, y: e.clientY };
     // Let the browser finish updating the selection first.
     window.setTimeout(() => {
@@ -255,13 +260,22 @@ export function AnnotatedViewer({ fileRef, segmentLabel, initialAnnotationId, in
           onMouseUp={onMouseUp}
           onScrollCapture={() => toolbar && setToolbar(null)}
         >
-          {children}
+          <InkProvider state={pen.state}>{children}</InkProvider>
+          {pen.toolbar}
 
-          <button type="button" data-anno-ui onClick={() => setPanelOpen((v) => !v)}
-            className="absolute top-3 right-5 z-10 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs text-white shadow hover:bg-black/75">
-            <Highlighter size={13} />
-            {annotations.length > 0 ? `${annotations.length} highlight${annotations.length === 1 ? '' : 's'}` : 'Highlights'}
-          </button>
+          <div data-anno-ui className="absolute top-3 right-5 z-10 flex gap-1.5">
+            {ink && !pen.penOut && (
+              <button type="button" onClick={pen.takePen} title="Draw on the pages with a pen or highlighter"
+                className="inline-flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs text-white shadow hover:bg-black/75">
+                <PenLine size={13} /> Pen
+              </button>
+            )}
+            <button type="button" onClick={() => setPanelOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs text-white shadow hover:bg-black/75">
+              <Highlighter size={13} />
+              {annotations.length > 0 ? `${annotations.length} highlight${annotations.length === 1 ? '' : 's'}` : 'Highlights'}
+            </button>
+          </div>
         </div>
 
         {panelOpen && (

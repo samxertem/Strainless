@@ -117,10 +117,12 @@ export async function updateItem(id: number, patch: ItemPatch): Promise<void> {
 
 export async function deleteItem(id: number): Promise<void> {
   const d = await db();
-  await d.execute(
-    `DELETE FROM annotations WHERE file_ref IN (SELECT 'attachment:' || id FROM attachments WHERE item_id = $1)`,
-    [id],
-  );
+  for (const table of ['annotations', 'ink_strokes']) {
+    await d.execute(
+      `DELETE FROM ${table} WHERE file_ref IN (SELECT 'attachment:' || id FROM attachments WHERE item_id = $1)`,
+      [id],
+    );
+  }
   await d.execute('DELETE FROM attachments WHERE item_id = $1', [id]);
   await d.execute('DELETE FROM reminders_sent WHERE item_id = $1', [id]);
   await d.execute('DELETE FROM exam_topics WHERE item_id = $1', [id]);
@@ -152,6 +154,7 @@ export async function addAttachments(itemId: number, sourcePaths: string[]): Pro
 export async function removeAttachment(att: Attachment): Promise<void> {
   const d = await db();
   await d.execute('DELETE FROM annotations WHERE file_ref = $1', [`attachment:${att.id}`]);
+  await d.execute('DELETE FROM ink_strokes WHERE file_ref = $1', [`attachment:${att.id}`]);
   await d.execute('DELETE FROM attachments WHERE id = $1', [att.id]);
   await deleteFile('attachments', att.item_id, att.stored_name);
 }
