@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+/* Semantic colour tokens: components use bg-surface / text-muted / border-line etc.,
+   and only these variables change between light and dark. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-sidebar: var(--sidebar);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+}
+
+:root {
+  color-scheme: light;
+  --canvas: #f7f6f3;
+  --sidebar: #efede8;
+  --surface: #ffffff;
+  --surface-2: #f3f2ee;
+  --line: #e4e1da;
+  --ink: #23262b;
+  --muted: #6e727a;
+  --accent: #4d7d6c;
+  --accent-soft: #e3eee9;
+  --danger: #b4493b;
+  --danger-soft: #f7e6e2;
+  --warn: #a8701c;
+  --warn-soft: #f6ecda;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #16181b;
+  --sidebar: #1b1e22;
+  --surface: #1f2226;
+  --surface-2: #262a2f;
+  --line: #30353b;
+  --ink: #e5e5e1;
+  --muted: #979ca4;
+  --accent: #82b5a2;
+  --accent-soft: #24332e;
+  --danger: #e2806f;
+  --danger-soft: #3a2522;
+  --warn: #d9a650;
+  --warn-soft: #362d1c;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+input,
+textarea,
+.notes-preview {
+  user-select: text;
+}
+
+/* Rendered markdown. Tailwind's preflight strips all default element styles. */
+.notes-preview {
+  font-size: 14px;
+  line-height: 1.65;
+}
+.notes-preview > * + * { margin-top: 0.6em; }
+.notes-preview h1 { font-size: 1.35em; font-weight: 600; }
+.notes-preview h2 { font-size: 1.18em; font-weight: 600; }
+.notes-preview h3 { font-size: 1.05em; font-weight: 600; }
+.notes-preview ul { list-style: disc; padding-left: 1.4em; }
+.notes-preview ol { list-style: decimal; padding-left: 1.4em; }
+.notes-preview li + li { margin-top: 0.2em; }
+.notes-preview a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.notes-preview code { font-family: ui-monospace, "Cascadia Code", Menlo, monospace; font-size: 0.9em; background: var(--surface-2); padding: 0.1em 0.35em; border-radius: 4px; }
+.notes-preview pre { background: var(--surface-2); padding: 0.75em 1em; border-radius: 8px; overflow-x: auto; }
+.notes-preview pre code { background: none; padding: 0; }
+.notes-preview blockquote { border-left: 3px solid var(--line); padding-left: 0.9em; color: var(--muted); }
+.notes-preview hr { border: none; border-top: 1px solid var(--line); }
+.notes-preview table { border-collapse: collapse; }
+.notes-preview th, .notes-preview td { border: 1px solid var(--line); padding: 0.3em 0.6em; }
+.notes-preview input[type="checkbox"] { margin-right: 0.4em; vertical-align: middle; }
