@@ -23,7 +23,7 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPCONFIG/attachments/**", "$APPCONFIG/journal/**", "$APPCONFIG/courses/**"]
+        "scope": ["$APPCONFIG/attachments/**", "$APPCONFIG/journal/**", "$APPCONFIG/courses/**", "$APPCONFIG/documents/**"]
       }
     }
   },

@@ -23,8 +23,9 @@ const DB_SIDECARS: [&str; 2] = ["strainless.db-wal", "strainless.db-shm"];
 const ATTACHMENTS: &str = "attachments";
 const JOURNAL: &str = "journal";
 const COURSES: &str = "courses";
+const DOCUMENTS: &str = "documents";
 /// Folders of user files that travel with the database.
-const FILE_DIRS: [&str; 3] = [ATTACHMENTS, JOURNAL, COURSES];
+const FILE_DIRS: [&str; 4] = [ATTACHMENTS, JOURNAL, COURSES, DOCUMENTS];
 const SNAPSHOT: &str = "backup-snapshot.db";
 const MANIFEST: &str = "manifest.json";
 /// Automatic backups are named `Strainless-auto-YYYY-MM-DD.zip`; only these are ever pruned.
@@ -247,7 +248,7 @@ fn restore_backup_into(dir: &Path, backup: &Path, label: &str) -> Result<(), Str
     Ok(())
 }
 
-/// Extracts only `strainless.db`, `attachments/**` and `journal/**`. `enclosed_name()`
+/// Extracts only `strainless.db` and the FILE_DIRS folders. `enclosed_name()`
 /// rejects absolute paths and `..` components, so a malicious zip can't write outside `dest`.
 fn extract_allowed(archive: &mut ZipArchive<BufReader<File>>, dest: &Path) -> Result<(), String> {
     for i in 0..archive.len() {
@@ -312,6 +313,7 @@ mod tests {
         write(&data.join("attachments/2/ÇAP form (2).docx"), "docx bytes");
         write(&data.join("journal/2026-10-22/mood.jpg"), "mood photo");
         write(&data.join("courses/1/Week 3 - Fourier.pptx"), "slides");
+        write(&data.join("documents/0/CV.pdf"), "cv");
         write_backup_from(data, zip_path, &manifest(LATEST_SCHEMA)).unwrap();
     }
 
@@ -332,6 +334,7 @@ mod tests {
         restore_backup_into(&data, &zip_path, "test").unwrap();
         assert_eq!(read(&data.join("journal/2026-10-22/mood.jpg")), "mood photo");
         assert_eq!(read(&data.join("courses/1/Week 3 - Fourier.pptx")), "slides");
+        assert_eq!(read(&data.join("documents/0/CV.pdf")), "cv");
         assert!(!data.join("journal/2026-10-23").exists());
         assert_eq!(read(&data.join("pre-restore-test/journal/2026-10-23/later.jpg")), "later photo");
 

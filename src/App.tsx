@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { BookOpen, ImagePlus, Paperclip, X } from 'lucide-react';
+import { BookOpen, FolderInput, ImagePlus, LoaderCircle, Paperclip, X } from 'lucide-react';
 import * as db from './lib/db';
 import * as coursesDb from './lib/courses';
-import type { Category, Course, CourseHit, CourseSession, Item, ItemPatch, NewItem, Settings } from './lib/types';
+import type { Category, Course, CourseHit, CourseSession, DocumentFile, Item, ItemPatch, NewItem, Settings } from './lib/types';
 import { groupByBucket } from './lib/buckets';
 import { dayDiff, formatLongDate, startOfWeek, toDateInput } from './lib/dates';
 import { useNow, useTheme } from './lib/hooks';
@@ -11,6 +11,8 @@ import { useReminders } from './lib/reminders';
 import { indexNewFiles, type FileTextHit } from './lib/fileText';
 import { upcomingExams } from './lib/exams';
 import { autoBackupDue, runAutoBackup } from './lib/autoBackup';
+import { dismissNotice, noticeStore } from './lib/notice';
+import { documentPreview, type PreviewFile } from './lib/files';
 import { Sidebar, sameView, type View } from './components/Sidebar';
 import { QuickAdd } from './components/QuickAdd';
 import { Dashboard } from './components/Dashboard';
@@ -25,6 +27,8 @@ import { SearchPalette } from './components/SearchPalette';
 import { SettingsDialog } from './components/SettingsDialog';
 import { StarredList } from './components/StarredList';
 import { ExamPrepView } from './components/ExamPrepView';
+import { DocumentsView } from './components/DocumentsView';
+import { importWithNotice } from './components/folders/transfer';
 import { CourseView } from './components/course/CourseView';
 import { CourseDialog } from './components/course/CourseDialog';
 import { Preview } from './components/Preview';
@@ -32,9 +36,10 @@ import type { RowContext } from './components/ItemRow';
 
 type Dialog = 'categories' | 'settings' | 'search' | 'new-course' | 'edit-course' | null;
 
-/** What a dragged file is hovering: "item:12", "mood:2026-10-22", "course:3:" (library) or
- *  "course:3:7" (topic 7). A string, so repeated "over" events with the same target are no-ops. */
-type DropKey = `item:${number}` | `mood:${string}` | `course:${number}:${string}` | null;
+/** What a dragged file is hovering: "item:12" or "item:12:5" (its folder 5), "mood:2026-10-22",
+ *  "course:3::" (library), "course:3:7:" (topic 7), "course:3::9" (library folder 9), "docs:" or
+ *  "docs:4" (Documents, folder 4). A string, so repeated "over" events with the same target are no-ops. */
+type DropKey = `item:${string}` | `mood:${string}` | `course:${string}` | `docs:${string}` | null;
 
 export default function App() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -50,6 +55,11 @@ export default function App() {
   const [dialog, setDialog] = useState<Dialog>(null);
   const [dragActive, setDragActive] = useState(false);
   const [dropKey, setDropKey] = useState<DropKey>(null);
+  /** Where a drop would land, in words ("CE 477 › Week 3"), from the target's data-drop-label. */
+  const [dropLabel, setDropLabel] = useState<string | null>(null);
+  const [documentsVersion, setDocumentsVersion] = useState(0);
+  const [openDocument, setOpenDocument] = useState<PreviewFile | null>(null);
+  const notice = useSyncExternalStore(noticeStore.subscribe, noticeStore.get);
   const [attachmentsVersion, setAttachmentsVersion] = useState(0);
   const [journalVersion, setJournalVersion] = useState(0);
   const [courseVersion, setCourseVersion] = useState(0);
@@ -148,7 +158,7 @@ export default function App() {
       if (mod && key === 'n') {
         e.preventDefault();
         setDialog(null);
-        if (['focus', 'journal', 'starred', 'prep'].includes(view.kind)) navigate({ kind: 'dashboard' });
+        if (['focus', 'journal', 'starred', 'prep', 'documents'].includes(view.kind)) navigate({ kind: 'dashboard' });
         if (view.kind === 'course') navigate({ ...view, tab: 'tasks' });
         requestAnimationFrame(() => quickAddRef.current?.focus());
       } else if (mod && key === 'k') {
@@ -178,39 +188,51 @@ export default function App() {
       }
       db.setMoodPhoto(day, photo).then(() => setJournalVersion((v) => v + 1), (e) => setError(String(e)));
     } else if (target?.startsWith('course:')) {
-      const [, courseId, topicId] = target.split(':');
-      void run(() => coursesDb.addCourseFiles(Number(courseId), paths, topicId ? Number(topicId) : null))
-        .then(() => setCourseVersion((v) => v + 1));
+      const [, courseId, topicId, folderId] = target.split(':');
+      void run(() => importWithNotice({ kind: 'course', id: Number(courseId) }, paths, {
+        topicId: topicId ? Number(topicId) : null, folderId: folderId ? Number(folderId) : null,
+      })).then(() => setCourseVersion((v) => v + 1));
     } else if (target?.startsWith('item:')) {
-      const itemId = Number(target.slice(5));
-      setSelectedId(itemId);
-      void run(() => db.addAttachments(itemId, paths)).then(() => setAttachmentsVersion((v) => v + 1));
+      const [, itemId, folderId] = target.split(':');
+      setSelectedId(Number(itemId));
+      void run(() => importWithNotice({ kind: 'item', id: Number(itemId) }, paths, { folderId: folderId ? Number(folderId) : null }))
+        .then(() => setAttachmentsVersion((v) => v + 1));
+    } else if (target?.startsWith('docs:')) {
+      const folderId = target.slice(5);
+      void run(() => importWithNotice({ kind: 'documents' }, paths, { folderId: folderId ? Number(folderId) : null }))
+        .then(() => setDocumentsVersion((v) => v + 1));
     } else {
-      setError('Drop files onto an item, a course library or topic, or the journal’s mood box.');
+      setError('Drop files onto an item, a course library or topic, Documents, or the journal’s mood box.');
     }
   };
 
   useEffect(() => {
     // The webview reports physical pixels; elementFromPoint wants CSS pixels.
-    const targetAt = (pos: { x: number; y: number }): DropKey => {
+    const targetAt = (pos: { x: number; y: number }): { key: DropKey; label: string | null } => {
       const el = document.elementFromPoint(pos.x / devicePixelRatio, pos.y / devicePixelRatio);
-      const target = el?.closest<HTMLElement>('[data-drop-item],[data-drop-mood],[data-drop-course]');
-      if (!target) return null;
-      if (target.dataset.dropMood) return `mood:${target.dataset.dropMood}`;
-      if (target.dataset.dropCourse) return `course:${Number(target.dataset.dropCourse)}:${target.dataset.dropTopic ?? ''}`;
-      return `item:${Number(target.dataset.dropItem)}`;
+      const target = el?.closest<HTMLElement>('[data-drop-item],[data-drop-mood],[data-drop-course],[data-drop-docs]');
+      if (!target) return { key: null, label: null };
+      const { dropMood, dropCourse, dropTopic, dropFolder, dropDocs, dropItem, dropLabel } = target.dataset;
+      const label = dropLabel ?? null;
+      if (dropMood) return { key: `mood:${dropMood}`, label };
+      if (dropCourse) return { key: `course:${Number(dropCourse)}:${dropTopic ?? ''}:${dropFolder ?? ''}`, label };
+      if (dropDocs !== undefined) return { key: `docs:${dropDocs}`, label };
+      return { key: dropFolder ? `item:${Number(dropItem)}:${dropFolder}` : `item:${Number(dropItem)}`, label };
     };
     let disposed = false;
     let unlisten: (() => void) | undefined;
     getCurrentWebview()
       .onDragDropEvent(({ payload }) => {
         if (payload.type === 'enter' || payload.type === 'over') {
+          const { key, label } = targetAt(payload.position);
           setDragActive(true);
-          setDropKey(targetAt(payload.position));
+          setDropKey(key);
+          setDropLabel(label);
         } else {
           setDragActive(false);
           setDropKey(null);
-          if (payload.type === 'drop' && payload.paths.length > 0) handleDrop.current(targetAt(payload.position), payload.paths);
+          setDropLabel(null);
+          if (payload.type === 'drop' && payload.paths.length > 0) handleDrop.current(targetAt(payload.position).key, payload.paths);
         }
       })
       .then((fn) => (disposed ? fn() : (unlisten = fn))); // StrictMode may unmount before this resolves
@@ -276,7 +298,7 @@ export default function App() {
     void run(() => db.updateItem(item.id, { status: item.status === 'done' ? 'todo' : 'done' }));
   const openCourse = (id: number) => navigate({ kind: 'course', id, tab: 'topics' });
 
-  const dropTargetId = dropKey?.startsWith('item:') ? Number(dropKey.slice(5)) : null;
+  const dropTargetId = dropKey?.startsWith('item:') ? Number(dropKey.split(':')[1]) : null;
   const ctx: RowContext = { categoriesById, now, selectedId, dropTargetId, onOpen: setSelectedId, onToggleDone: toggleDone };
   const backupAgeDays =
     settings && items.length > 0
@@ -319,6 +341,11 @@ export default function App() {
         onError={showError}
       />
     ) : null;
+  } else if (view.kind === 'documents') {
+    page = (
+      <DocumentsView folderId={view.folderId ?? null} onFolder={(folderId) => navigate({ kind: 'documents', folderId })}
+        refreshKey={documentsVersion} dropKey={dropKey} onError={showError} />
+    );
   } else if (view.kind === 'prep') {
     page = (
       <ExamPrepView items={items} categoriesById={categoriesById} courses={courses} now={now} onOpenItem={setSelectedId}
@@ -458,6 +485,8 @@ export default function App() {
           onAttachmentsChanged={() => void refresh()}
           attachmentsRefreshKey={attachmentsVersion}
           isDropTarget={dropTargetId === selected.id}
+          dropKey={dropKey}
+          onError={showError}
         />
       )}
 
@@ -495,11 +524,19 @@ export default function App() {
           onPickFileText={(hit, query) => {
             setDialog(null);
             setTextHit({ hit, query });
+          }}
+          onPickDocument={(doc: DocumentFile) => {
+            setDialog(null);
+            navigate({ kind: 'documents', folderId: doc.folder_id });
+            setOpenDocument(documentPreview(doc));
           }} />
       )}
       {textHit && (
         <Preview files={[textHit.hit.file]} index={0} onIndexChange={() => {}} initialLocation={textHit.hit.location}
           findText={textHit.query} onClose={() => setTextHit(null)} />
+      )}
+      {openDocument && (
+        <Preview files={[openDocument]} index={0} onIndexChange={() => {}} onClose={() => setOpenDocument(null)} />
       )}
       {dialog === 'settings' && settings && (
         <SettingsDialog settings={settings} onChange={updateSettings} themePref={theme.pref} onThemeChange={theme.setPref}
@@ -510,12 +547,14 @@ export default function App() {
         <div className="pointer-events-none fixed top-4 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 rounded-full bg-ink px-4 py-2 text-sm text-canvas shadow-xl">
           {dropKey?.startsWith('mood:') ? (
             <><ImagePlus size={14} /> Set as the day’s mood photo</>
+          ) : dropLabel ? (
+            <><FolderInput size={14} /> Add to <strong className="font-semibold">{dropLabel}</strong></>
           ) : dropCourse ? (
             <><BookOpen size={14} /> Add to <strong className="font-semibold">{dropCourse.name}</strong>{dropKey!.split(':')[2] ? ' (this topic)' : ' library'}</>
           ) : dropItem ? (
             <><Paperclip size={14} /> Attach to <strong className="font-semibold">{dropItem.title}</strong></>
           ) : (
-            <><Paperclip size={14} /> Drop onto an item or a course</>
+            <><Paperclip size={14} /> Drop onto an item, a course or Documents</>
           )}
         </div>
       )}
@@ -523,6 +562,16 @@ export default function App() {
       {needsRestart && (
         <div className="fixed top-4 left-1/2 z-50 -translate-x-1/2 rounded-xl border border-line bg-warn-soft px-4 py-2.5 text-sm text-ink shadow-lg">
           Your backup was restored. Quit and reopen Strainless once to finish upgrading it.
+        </div>
+      )}
+
+      {notice && (
+        <div className="fixed right-5 bottom-5 z-[75] flex max-w-md items-center gap-2.5 rounded-xl border border-line bg-surface px-4 py-2.5 text-sm text-ink shadow-lg">
+          {notice.busy && <LoaderCircle size={15} className="shrink-0 animate-spin text-accent" />}
+          <span className="min-w-0 flex-1 break-words">{notice.text}</span>
+          {!notice.busy && (
+            <button type="button" onClick={dismissNotice} className="text-muted hover:text-ink"><X size={14} /></button>
+          )}
         </div>
       )}
 

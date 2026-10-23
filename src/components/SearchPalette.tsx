@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { BookOpen, FileText, ListChecks, NotebookPen, Paperclip, Search } from 'lucide-react';
-import type { Category, CourseHit, Item, JournalHit, SearchHit } from '../lib/types';
+import type { Category, CourseHit, DocumentFile, Item, JournalHit, SearchHit } from '../lib/types';
 import { MARK_END, MARK_START } from '../lib/types';
 import * as db from '../lib/db';
 import { searchCourses } from '../lib/courses';
+import { searchDocuments } from '../lib/documents';
 import { indexProgress, searchFileText, type FileTextHit } from '../lib/fileText';
 import { formatDue } from '../lib/dates';
 import { CategoryChip, Marked, StatusPill } from './ui';
@@ -18,12 +19,14 @@ interface Props {
   onPickCourse: (hit: CourseHit) => void;
   /** A page or slide whose text matched; `query` is what to mark on it. */
   onPickFileText: (hit: FileTextHit, query: string) => void;
+  onPickDocument: (doc: DocumentFile) => void;
   onClose: () => void;
 }
 
 type Result =
   | { type: 'item'; hit: SearchHit }
   | { type: 'course'; hit: CourseHit }
+  | { type: 'document'; hit: DocumentFile }
   | { type: 'text'; hit: FileTextHit }
   | { type: 'journal'; hit: JournalHit };
 
@@ -46,12 +49,13 @@ const stripMarkdown = (s: string) =>
     .replace(/\]\([^)]*\)?/g, '') // link targets, even when the snippet cut them off
     .replace(/[*_`#>[\]]+/g, ''); // emphasis, code, headings, quotes, brackets
 
-export function SearchPalette({ items, categoriesById, now, onPick, onPickJournal, onPickCourse, onPickFileText, onClose }: Props) {
+export function SearchPalette({ items, categoriesById, now, onPick, onPickJournal, onPickCourse, onPickFileText, onPickDocument, onClose }: Props) {
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [journalHits, setJournalHits] = useState<JournalHit[]>([]);
   const [courseHits, setCourseHits] = useState<CourseHit[]>([]);
   const [textHits, setTextHits] = useState<FileTextHit[]>([]);
+  const [docHits, setDocHits] = useState<DocumentFile[]>([]);
   const indexing = useSyncExternalStore(indexProgress.subscribe, indexProgress.get);
   const [active, setActive] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -66,16 +70,18 @@ export function SearchPalette({ items, categoriesById, now, onPick, onPickJourna
       setJournalHits([]);
       setCourseHits([]);
       setTextHits([]);
+      setDocHits([]);
       return;
     }
     const timer = window.setTimeout(() => {
-      Promise.all([db.search(query), searchCourses(query), searchFileText(query), db.searchJournal(query)]).then(
-        ([itemHits, courseResults, textResults, pages]) => {
+      Promise.all([db.search(query), searchCourses(query), searchFileText(query), db.searchJournal(query), searchDocuments(query)]).then(
+        ([itemHits, courseResults, textResults, pages, docs]) => {
           if (id !== requestId.current) return; // a newer query is in flight; drop this stale response
           setHits(itemHits);
           setCourseHits(courseResults);
           setTextHits(textResults);
           setJournalHits(pages);
+          setDocHits(docs);
           setError(null);
         },
         (e) => id === requestId.current && setError(String(e)),
@@ -84,7 +90,7 @@ export function SearchPalette({ items, categoriesById, now, onPick, onPickJourna
     return () => window.clearTimeout(timer);
   }, [query]);
 
-  useEffect(() => setActive(0), [hits, journalHits, courseHits, textHits, query]);
+  useEffect(() => setActive(0), [hits, journalHits, courseHits, textHits, docHits, query]);
 
   // With no query, show what was touched most recently: usually what you're looking for.
   const itemResults: SearchHit[] = query.trim()
@@ -96,12 +102,14 @@ export function SearchPalette({ items, categoriesById, now, onPick, onPickJourna
   const results: Result[] = [
     ...itemResults.map((hit) => ({ type: 'item' as const, hit })),
     ...(query.trim() ? courseHits.map((hit) => ({ type: 'course' as const, hit })) : []),
+    ...(query.trim() ? docHits.map((hit) => ({ type: 'document' as const, hit })) : []),
     ...(query.trim() ? textHits.map((hit) => ({ type: 'text' as const, hit })) : []),
     ...(query.trim() ? journalHits.map((hit) => ({ type: 'journal' as const, hit })) : []),
   ];
   const pick = (r: Result) =>
     r.type === 'item' ? onPick(r.hit.id)
     : r.type === 'course' ? onPickCourse(r.hit)
+    : r.type === 'document' ? onPickDocument(r.hit)
     : r.type === 'text' ? onPickFileText(r.hit, query)
     : onPickJournal(r.hit.day);
   const firstOf = (type: Result['type']) => results.findIndex((r) => r.type === type);
@@ -154,6 +162,22 @@ export function SearchPalette({ items, categoriesById, now, onPick, onPickJourna
                     {h.kind === 'file' ? <FileIcon name={h.label} size={14} tinted className="shrink-0" /> : <Icon size={14} className="shrink-0 text-muted" />}
                     <Marked text={markSubstring(h.label, query)} className="min-w-0 flex-1 truncate text-sm text-ink" />
                     <span className="shrink-0 text-xs text-muted">{h.course_name} · {COURSE_KIND_LABEL[h.kind]}</span>
+                  </button>
+                </div>
+              );
+            }
+            if (result.type === 'document') {
+              const d = result.hit;
+              return (
+                <div key={`d-${d.id}`}>
+                  {index === firstOf('document') && (
+                    <div className="px-3 pt-3 pb-1 text-[11px] font-medium tracking-wide text-muted uppercase">Documents</div>
+                  )}
+                  <button type="button" data-index={index} onMouseMove={() => setActive(index)} onClick={() => pick(result)}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left ${index === active ? 'bg-accent-soft' : ''}`}>
+                    <FileIcon name={d.original_name} size={14} tinted className="shrink-0" />
+                    <Marked text={markSubstring(d.original_name, query)} className="min-w-0 flex-1 truncate text-sm text-ink" />
+                    <span className="shrink-0 text-xs text-muted">Documents</span>
                   </button>
                 </div>
               );

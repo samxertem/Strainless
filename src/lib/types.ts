@@ -179,6 +179,7 @@ export interface CourseFile {
   id: number;
   course_id: number;
   topic_id: number | null;
+  folder_id: number | null;
   original_name: string;
   stored_name: string;
   mime: string | null;
@@ -221,7 +222,7 @@ export interface Annotation {
 /** A starred quote plus enough about its file to open it again. */
 export interface StarredQuote extends Annotation {
   file_name: string;
-  file_kind: 'attachment' | 'course_file';
+  file_kind: 'attachment' | 'course_file' | 'document';
   owner_id: number;
   stored_name: string;
   mime: string | null;
@@ -241,6 +242,30 @@ export interface CourseHit {
 export interface Attachment {
   id: number;
   item_id: number;
+  folder_id: number | null;
+  original_name: string;
+  stored_name: string;
+  mime: string | null;
+  size: number;
+  added_at: string;
+}
+
+/** Where a folder lives: the Documents page, a course library, or a task's attachments. */
+export type FolderPlace = { kind: 'documents' } | { kind: 'course'; id: number } | { kind: 'item'; id: number };
+
+export interface Folder {
+  id: number;
+  course_id: number | null;
+  item_id: number | null;
+  /** null = top level. */
+  parent_id: number | null;
+  name: string;
+}
+
+/** A file on the Documents page (not tied to a course or task). */
+export interface DocumentFile {
+  id: number;
+  folder_id: number | null;
   original_name: string;
   stored_name: string;
   mime: string | null;

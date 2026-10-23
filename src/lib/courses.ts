@@ -179,14 +179,16 @@ export async function getCourseFile(id: number): Promise<CourseFile | null> {
   return (await (await db()).select<CourseFile[]>('SELECT * FROM course_files WHERE id = $1', [id]))[0] ?? null;
 }
 
-export async function addCourseFiles(courseId: number, sourcePaths: string[], topicId: number | null = null): Promise<void> {
+export async function addCourseFiles(
+  courseId: number, sourcePaths: string[], topicId: number | null = null, folderId: number | null = null,
+): Promise<void> {
   const d = await db();
   for (const sourcePath of sourcePaths) {
     const f = await importFile('courses', courseId, sourcePath);
     await d.execute(
-      `INSERT INTO course_files (course_id, topic_id, original_name, stored_name, mime, size)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [courseId, topicId, f.original_name, f.stored_name, guessMime(f.original_name), f.size],
+      `INSERT INTO course_files (course_id, topic_id, folder_id, original_name, stored_name, mime, size)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [courseId, topicId, folderId, f.original_name, f.stored_name, guessMime(f.original_name), f.size],
     );
   }
 }

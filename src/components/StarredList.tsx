@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Search, Star } from 'lucide-react';
 import type { StarredQuote } from '../lib/types';
 import { listStarred, updateAnnotation } from '../lib/annotations';
-import { attachmentPreview, courseFilePreview, type PreviewFile } from '../lib/files';
+import { previewOfKind, type PreviewFile } from '../lib/files';
 import { Preview } from './Preview';
 import { FileIcon } from './FileIcon';
 import { SWATCH } from './annotate/AnnotatedViewer';
@@ -19,9 +19,7 @@ const when = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }
 function previewOf(q: StarredQuote): PreviewFile {
   const id = Number(q.file_ref.split(':')[1]);
   const file = { id, original_name: q.file_name, stored_name: q.stored_name, mime: q.mime };
-  return q.file_kind === 'course_file'
-    ? courseFilePreview({ ...file, course_id: q.owner_id })
-    : attachmentPreview({ ...file, item_id: q.owner_id });
+  return previewOfKind(q.file_kind, file, q.owner_id);
 }
 
 /** Starred quotes as cards, grouped by file; clicking one reopens the file right at the quote. */

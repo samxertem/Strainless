@@ -112,7 +112,7 @@ export function TopicsTab({ course, refreshKey, dropKey, onChanged, onError }: P
             course={course}
             files={filesByTopic.get(t.id) ?? []}
             expanded={expanded.has(t.id)}
-            isDropTarget={dropKey === `course:${course.id}:${t.id}`}
+            isDropTarget={dropKey === `course:${course.id}:${t.id}:`}
             canMoveUp={i > 0}
             canMoveDown={i < topics.length - 1}
             onToggle={() => setExpanded((s) => {

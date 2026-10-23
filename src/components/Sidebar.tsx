@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import {
-  Archive, CalendarDays, CircleCheck, FolderOpen, GraduationCap, Hourglass, LayoutDashboard, ListTodo, Monitor, Moon,
+  Archive, CalendarDays, CircleCheck, FolderOpen, Folders, GraduationCap, Hourglass, LayoutDashboard, ListTodo, Monitor, Moon,
   NotebookPen, Plus, Search, Settings, Settings2, Star, Sun, Sunrise,
 } from 'lucide-react';
 import type { Category, Course } from '../lib/types';
@@ -18,6 +18,7 @@ export type View =
   | { kind: 'waiting' }
   | { kind: 'completed' }
   | { kind: 'starred' }
+  | { kind: 'documents'; folderId?: number | null }
   | { kind: 'category'; id: number }
   | { kind: 'course'; id: number; tab: CourseTab; noteId?: number };
 
@@ -25,7 +26,8 @@ export const sameView = (a: View, b: View) =>
   a.kind === b.kind &&
   (a.kind !== 'category' || (b.kind === 'category' && a.id === b.id)) &&
   (a.kind !== 'course' || (b.kind === 'course' && a.id === b.id && a.tab === b.tab && a.noteId === b.noteId)) &&
-  (a.kind !== 'journal' || (b.kind === 'journal' && a.day === b.day));
+  (a.kind !== 'journal' || (b.kind === 'journal' && a.day === b.day)) &&
+  (a.kind !== 'documents' || (b.kind === 'documents' && (a.folderId ?? null) === (b.folderId ?? null)));
 
 interface Props {
   view: View;
@@ -99,6 +101,8 @@ export function Sidebar(p: Props) {
           onClick={go({ kind: 'completed' })} />
         <NavItem icon={<Star size={15} />} label="Starred" active={is({ kind: 'starred' })}
           onClick={go({ kind: 'starred' })} />
+        <NavItem icon={<Folders size={15} />} label="Documents" active={p.view.kind === 'documents'}
+          onClick={go({ kind: 'documents' })} />
 
         <Heading action={
           <button type="button" onClick={p.onAddCourse} title="New course"

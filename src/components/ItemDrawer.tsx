@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ask } from '@tauri-apps/plugin-dialog';
-import { Trash2, X } from 'lucide-react';
+import { Download, Trash2, X } from 'lucide-react';
 import type { Category, Item, ItemPatch, Priority, Status } from '../lib/types';
 import { PRIORITY_LABELS, STATUS_LABELS } from '../lib/types';
 import { joinDue, splitDue } from '../lib/dates';
@@ -8,6 +8,8 @@ import { useDebouncedSave } from '../lib/hooks';
 import { FieldLabel, Segmented, inputClass } from './ui';
 import { NotesEditor } from './NotesEditor';
 import { Attachments } from './Attachments';
+import { itemExport } from '../lib/exporting';
+import { exportWithNotice } from './folders/transfer';
 
 interface Props {
   item: Item;
@@ -21,6 +23,9 @@ interface Props {
   attachmentsRefreshKey: number;
   /** True while files are being dragged over this panel. */
   isDropTarget: boolean;
+  /** What a dragged file is over, so a folder inside the attachments can light up. */
+  dropKey: string | null;
+  onError: (message: string) => void;
 }
 
 const STATUS_OPTIONS = (Object.keys(STATUS_LABELS) as Status[]).map((value) => ({ value, label: STATUS_LABELS[value] }));
@@ -32,7 +37,7 @@ const PRIORITY_OPTIONS = ([1, 2, 3] as Priority[]).map((value) => ({ value, labe
  * fields (status, dates…) save immediately.
  */
 export function ItemDrawer({
-  item, categories, courses, onSave, onDelete, onClose, onAttachmentsChanged, attachmentsRefreshKey, isDropTarget,
+  item, categories, courses, onSave, onDelete, onClose, onAttachmentsChanged, attachmentsRefreshKey, isDropTarget, dropKey, onError,
 }: Props) {
   const [title, setTitle] = useState(item.title);
   const [course, setCourse] = useState(item.course ?? '');
@@ -75,6 +80,14 @@ export function ItemDrawer({
             : `Added ${new Date(item.created_at).toLocaleDateString('en-GB')}`}
         </span>
         <div className="flex gap-1">
+          <button type="button" title="Export this task and its files as a folder"
+            onClick={() => {
+              flush();
+              void exportWithNotice(item.title, () => itemExport(item)).catch((e) => onError(String(e)));
+            }}
+            className="rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-ink">
+            <Download size={15} />
+          </button>
           <button type="button" onClick={confirmDelete} title="Delete item"
             className="rounded-md p-1.5 text-muted hover:bg-danger-soft hover:text-danger">
             <Trash2 size={15} />
@@ -162,7 +175,7 @@ export function ItemDrawer({
           }}
         />
 
-        <Attachments itemId={item.id} refreshKey={attachmentsRefreshKey} onChanged={onAttachmentsChanged} />
+        <Attachments item={item} refreshKey={attachmentsRefreshKey} dropKey={dropKey} onChanged={onAttachmentsChanged} />
       </div>
     </aside>
   );

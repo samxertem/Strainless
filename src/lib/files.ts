@@ -1,8 +1,11 @@
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
-import type { Attachment, CourseFile } from './types';
+import type { Attachment, CourseFile, DocumentFile } from './types';
 
-/** Storage areas on disk: attachments/<item id>/… and courses/<course id>/… */
-export type FileArea = 'attachments' | 'courses';
+/** Storage areas on disk: attachments/<item id>/…, courses/<course id>/… and documents/0/… */
+export type FileArea = 'attachments' | 'courses' | 'documents';
+
+/** Documents all live in one folder on disk; their folders exist only in the database. */
+export const DOCUMENTS_OWNER = 0;
 
 export interface StoredFile {
   stored_name: string;
@@ -34,6 +37,18 @@ export const deleteFile = (area: FileArea, ownerId: number, storedName: string) 
 export const deleteOwnerFiles = (area: FileArea, ownerId: number) =>
   invoke<void>('delete_owner_files', { area, ownerId });
 
+/** A file inside a picked or dropped folder; `folders` runs from that folder down to the file. */
+export interface ScannedFile {
+  path: string;
+  folders: string[];
+  name: string;
+  size: number;
+}
+
+/** Lists files under the given paths (folders recursively), skipping desktop.ini and the like. */
+export const scanPaths = (paths: string[]) =>
+  invoke<{ files: ScannedFile[]; folders: string[][] }>('scan_paths', { paths });
+
 const MIME_BY_EXT: Record<string, string> = {
   pdf: 'application/pdf',
   png: 'image/png',
@@ -62,7 +77,7 @@ export const guessMime = (name: string): string | null => MIME_BY_EXT[extensionO
 
 /**
  * Everything the preview needs to show a file, whichever table it came from.
- * `ref` identifies the file for highlights: "attachment:<id>" or "course_file:<id>".
+ * `ref` identifies the file for highlights: "attachment:<id>", "course_file:<id>" or "document:<id>".
  */
 export interface PreviewFile {
   ref: string;
@@ -95,6 +110,29 @@ export function courseFilePreview(f: Pick<CourseFile, 'id' | 'course_id' | 'orig
   };
 }
 
+export function documentPreview(f: Pick<DocumentFile, 'id' | 'original_name' | 'stored_name' | 'mime'>): PreviewFile {
+  return {
+    ref: `document:${f.id}`,
+    name: f.original_name,
+    mime: f.mime,
+    load: () => readFile('documents', DOCUMENTS_OWNER, f.stored_name),
+    url: () => fileUrl('documents', DOCUMENTS_OWNER, f.stored_name),
+    openExternally: () => openFile('documents', DOCUMENTS_OWNER, f.stored_name),
+  };
+}
+
+/** Which table a file_ref points into: 'course_file:3' → 'course_file'. */
+export type FileKind = 'course_file' | 'attachment' | 'document';
+
+/** The preview of a file known by its kind (starred quotes, search hits). `ownerId` is the course or item id. */
+export function previewOfKind(
+  kind: FileKind, f: Pick<DocumentFile, 'id' | 'original_name' | 'stored_name' | 'mime'>, ownerId: number,
+): PreviewFile {
+  if (kind === 'course_file') return courseFilePreview({ ...f, course_id: ownerId });
+  if (kind === 'attachment') return attachmentPreview({ ...f, item_id: ownerId });
+  return documentPreview(f);
+}
+
 export type FileType = 'pdf' | 'slides' | 'doc' | 'sheet' | 'image' | 'code' | 'archive' | 'other';
 
 const TYPE_BY_EXT: Record<string, FileType> = {
@@ -102,7 +140,7 @@ const TYPE_BY_EXT: Record<string, FileType> = {
   ppt: 'slides', pptx: 'slides', key: 'slides', odp: 'slides',
   doc: 'doc', docx: 'doc', odt: 'doc', rtf: 'doc', txt: 'doc', md: 'doc',
   xls: 'sheet', xlsx: 'sheet', xlsm: 'sheet', ods: 'sheet', csv: 'sheet',
-  png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', svg: 'image', heic: 'image',
+  png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', svg: 'image', heic: 'image', bmp: 'image', tif: 'image', tiff: 'image',
   py: 'code', m: 'code', c: 'code', cpp: 'code', h: 'code', java: 'code', js: 'code', ts: 'code',
   ipynb: 'code', vhd: 'code', v: 'code', sv: 'code', asm: 'code', json: 'code', sql: 'code', r: 'code',
   zip: 'archive', rar: 'archive', '7z': 'archive',

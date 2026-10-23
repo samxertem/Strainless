@@ -3,7 +3,7 @@ import { ChevronRight, ListChecks, Star } from 'lucide-react';
 import type { Category, Course, CourseFile, CourseTopic, Item, StarredQuote } from '../lib/types';
 import * as coursesDb from '../lib/courses';
 import { listStarred } from '../lib/annotations';
-import { courseFilePreview, attachmentPreview, type PreviewFile } from '../lib/files';
+import { courseFilePreview, previewOfKind, type PreviewFile } from '../lib/files';
 import { formatDue } from '../lib/dates';
 import { listExamTopics, setExamTopics, studyPlan, suggestedScope, upcomingExams, type Exam, type StudyPlan } from '../lib/exams';
 import { NEXT_STATUS, StatusButton } from './course/TopicsTab';
@@ -46,7 +46,7 @@ const daysText = (days: number) => (days === 0 ? 'today' : days === 1 ? 'tomorro
 function starredPreview(q: StarredQuote): PreviewFile {
   const id = Number(q.file_ref.split(':')[1]);
   const file = { id, original_name: q.file_name, stored_name: q.stored_name, mime: q.mime };
-  return q.file_kind === 'course_file' ? courseFilePreview({ ...file, course_id: q.owner_id }) : attachmentPreview({ ...file, item_id: q.owner_id });
+  return previewOfKind(q.file_kind, file, q.owner_id);
 }
 
 export function ExamPrepView({ items, categoriesById, courses, now, onOpenItem, onOpenCourse, onChanged, onError }: Props) {

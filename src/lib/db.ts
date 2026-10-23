@@ -140,13 +140,13 @@ export async function listAttachments(itemId: number): Promise<Attachment[]> {
   );
 }
 
-export async function addAttachments(itemId: number, sourcePaths: string[]): Promise<void> {
+export async function addAttachments(itemId: number, sourcePaths: string[], folderId: number | null = null): Promise<void> {
   const d = await db();
   for (const sourcePath of sourcePaths) {
     const file = await importFile('attachments', itemId, sourcePath);
     await d.execute(
-      'INSERT INTO attachments (item_id, original_name, stored_name, mime, size) VALUES ($1, $2, $3, $4, $5)',
-      [itemId, file.original_name, file.stored_name, guessMime(file.original_name), file.size],
+      'INSERT INTO attachments (item_id, folder_id, original_name, stored_name, mime, size) VALUES ($1, $2, $3, $4, $5, $6)',
+      [itemId, folderId, file.original_name, file.stored_name, guessMime(file.original_name), file.size],
     );
   }
 }

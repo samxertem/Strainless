@@ -49,6 +49,11 @@ export async function listStarred(courseId?: number): Promise<StarredQuote[]> {
        JOIN items i ON i.id = t.item_id
        LEFT JOIN courses c ON c.name = i.course
       WHERE a.starred = 1
+     UNION ALL
+     SELECT a.*, doc.original_name, 'document', 0, doc.stored_name, doc.mime, NULL, NULL, NULL
+       FROM annotations a
+       JOIN documents doc ON a.file_ref = 'document:' || doc.id
+      WHERE a.starred = 1
      ORDER BY created_at DESC`,
   );
   return courseId === undefined ? rows : rows.filter((r) => r.course_id === courseId);

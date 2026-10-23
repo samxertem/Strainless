@@ -1,5 +1,7 @@
 import type { RefObject } from 'react';
-import { Clock, MapPin, Pencil } from 'lucide-react';
+import { Clock, Download, MapPin, Pencil } from 'lucide-react';
+import { courseExport } from '../../lib/exporting';
+import { exportWithNotice } from '../folders/transfer';
 import type { Category, Course, CourseSession, Item, NewItem } from '../../lib/types';
 import { SESSION_KIND_LABELS } from '../../lib/types';
 import type { RowContext } from '../ItemRow';
@@ -72,6 +74,11 @@ export function CourseView(p: Props) {
             </div>
           )}
         </div>
+        <button type="button" title="Export the library, notes, topics and task files as a folder"
+          onClick={() => void exportWithNotice(course.name, () => courseExport(course)).catch((e) => p.onError(String(e)))}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink hover:bg-surface-2">
+          <Download size={13} /> Export
+        </button>
         <button type="button" onClick={p.onEdit}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-ink hover:bg-surface-2">
           <Pencil size={13} /> Edit{p.sessions.length === 0 ? ' & add schedule' : ''}

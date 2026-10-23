@@ -17,6 +17,7 @@ const MIGRATIONS: &[(i64, &str, &str)] = &[
     (6, "text inside files", include_str!("../migrations/006_file_text.sql")),
     (7, "exam topics", include_str!("../migrations/007_exam_topics.sql")),
     (8, "pen drawings", include_str!("../migrations/008_ink.sql")),
+    (9, "folders and documents", include_str!("../migrations/009_folders.sql")),
 ];
 
 /// Highest schema version this build understands; backups from newer builds are refused.
@@ -53,6 +54,8 @@ pub fn run() {
             files::delete_file,
             files::delete_owner_files,
             files::open_data_folder,
+            files::scan_paths,
+            files::export_folder,
             files::write_calendar_file,
             files::import_journal_photo,
             files::journal_photo_path,

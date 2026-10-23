@@ -2,14 +2,15 @@
 // background, into the file_text full-text index; search then finds the exact page.
 
 import { db, toFtsQuery } from './db';
-import { attachmentPreview, courseFilePreview, extensionOf, readFile, type FileArea, type PreviewFile } from './files';
+import { DOCUMENTS_OWNER, extensionOf, previewOfKind, readFile, type FileArea, type FileKind, type PreviewFile } from './files';
 
 const INDEXED_EXTENSIONS = ['pdf', 'pptx'];
 /** Pages per INSERT: few enough to stay well under SQLite's parameter limit. */
 const ROWS_PER_INSERT = 50;
 
 // Every file that still exists, as a file_ref, for clean-up.
-const EXISTING_REFS = `SELECT 'course_file:' || id FROM course_files UNION ALL SELECT 'attachment:' || id FROM attachments`;
+const EXISTING_REFS = `SELECT 'course_file:' || id FROM course_files UNION ALL SELECT 'attachment:' || id FROM attachments
+  UNION ALL SELECT 'document:' || id FROM documents`;
 const indexedName = (column: string) => INDEXED_EXTENSIONS.map((e) => `lower(${column}) LIKE '%.${e}'`).join(' OR ');
 
 interface PendingFile {
@@ -66,6 +67,9 @@ async function indexPass(): Promise<void> {
        UNION ALL
        SELECT 'attachment:' || id, 'attachments', item_id, stored_name, original_name, size
          FROM attachments WHERE ${indexedName('original_name')}
+       UNION ALL
+       SELECT 'document:' || id, 'documents', ${DOCUMENTS_OWNER}, stored_name, original_name, size
+         FROM documents WHERE ${indexedName('original_name')}
      ) WHERE ref NOT IN (SELECT file_ref FROM file_text_status)
      ORDER BY size`,
   );
@@ -168,8 +172,9 @@ export async function searchFileText(query: string): Promise<FileTextHit[]> {
   const idsOf = (kind: string) => [...new Set(rows.filter((r) => r.file_ref.startsWith(`${kind}:`)).map((r) => Number(r.file_ref.split(':')[1])))];
   const courseIds = idsOf('course_file');
   const attachmentIds = idsOf('attachment');
+  const documentIds = idsOf('document');
   // Ids are numbers parsed above, never user text, so listing them inline is safe.
-  const [courseFiles, attachments] = await Promise.all([
+  const [courseFiles, attachments, documents] = await Promise.all([
     courseIds.length
       ? d.select<FileRow[]>(
           `SELECT f.id, f.course_id AS owner_id, f.original_name, f.stored_name, f.mime, c.name AS course_name
@@ -182,10 +187,17 @@ export async function searchFileText(query: string): Promise<FileTextHit[]> {
              FROM attachments a JOIN items i ON i.id = a.item_id WHERE a.id IN (${attachmentIds.join(',')})`,
         )
       : [],
+    documentIds.length
+      ? d.select<FileRow[]>(
+          `SELECT id, ${DOCUMENTS_OWNER} AS owner_id, original_name, stored_name, mime, NULL AS course_name
+             FROM documents WHERE id IN (${documentIds.join(',')})`,
+        )
+      : [],
   ]);
-  const files = new Map<string, FileRow & { kind: 'course_file' | 'attachment' }>([
+  const files = new Map<string, FileRow & { kind: FileKind }>([
     ...courseFiles.map((f) => [`course_file:${f.id}`, { ...f, kind: 'course_file' as const }] as const),
     ...attachments.map((f) => [`attachment:${f.id}`, { ...f, kind: 'attachment' as const }] as const),
+    ...documents.map((f) => [`document:${f.id}`, { ...f, kind: 'document' as const }] as const),
   ]);
 
   const perFile = new Map<string, number>();
@@ -197,7 +209,7 @@ export async function searchFileText(query: string): Promise<FileTextHit[]> {
     perFile.set(r.file_ref, count + 1);
     const base = { id: f.id, original_name: f.original_name, stored_name: f.stored_name, mime: f.mime };
     hits.push({
-      file: f.kind === 'course_file' ? courseFilePreview({ ...base, course_id: f.owner_id }) : attachmentPreview({ ...base, item_id: f.owner_id }),
+      file: previewOfKind(f.kind, base, f.owner_id),
       location: r.location,
       snippet: r.snippet,
       courseName: f.course_name,
