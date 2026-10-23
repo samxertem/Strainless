@@ -18,7 +18,7 @@ day's classes and the first three tasks.
 **Courses.** Each course has a weekly timetable, semester dates and five tabs:
 
 - Topics: the syllabus as a checklist with a progress bar. Paste a list and every line becomes a topic.
-- Library: every file for the course (slides, PDFs, Word, Excel, images, code), grouped by topic. Drag files in from Explorer or Finder.
+- Library: every file for the course (slides, PDFs, Word, Excel, images, code), in folders and grouped by topic. Drag files or whole folders in from Explorer or Finder; adding the same download again only brings in new files.
 - Notes: markdown pages with syntax-highlighted code blocks. Screenshots can be pasted straight in.
 - Starred: the quotes you starred in this course's files.
 - Tasks: homework, quizzes and exams for the course.
@@ -57,7 +57,9 @@ journal. Turkish characters don't have to be typed exactly: `cap` finds `ÇAP`.
 Also included:
 
 - Tasks with category, course, due date and time, status (to do, in progress, waiting, done), priority and markdown notes
-- Attachments on any task
+- Attachments on any task, in folders, including copies of files from Documents
+- Documents: a page with folders for files that aren't for one course (CV, transcripts, application papers)
+- Export a course, a task or any folder to disk as a normal folder
 - Desktop reminders a day before and shortly before a deadline, while the app is open
 - Export of deadlines and the weekly timetable as an `.ics` file for Google, Apple or Outlook calendar
 - Backup to a single zip file, and restore from it
@@ -86,8 +88,15 @@ The Windows installers end up in `src-tauri/target/release/bundle/` (`nsis/` and
 
 A macOS build has to be made on a Mac. The workflow in `.github/workflows/build.yml` builds
 both platforms on GitHub Actions: run it from the Actions tab, or push a tag such as `v0.2.0`
-to attach the installers to a draft release. The Mac app isn't signed, so the first time you
-open it, right-click it and choose Open.
+to attach the installers to a draft release.
+
+The Mac app isn't signed with an Apple developer account, so macOS blocks it the first time.
+Open it once, then go to System Settings → Privacy & Security and click Open Anyway. If macOS
+says the app is damaged, run this in Terminal and open it again:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Strainless.app
+```
 
 ## Where the data is
 
@@ -96,8 +105,8 @@ open it, right-click it and choose Open.
 | Windows | `%APPDATA%\com.strainless.app\` |
 | macOS | `~/Library/Application Support/com.strainless.app/` |
 
-The folder holds `strainless.db` (SQLite) and the copied files: `attachments/`, `courses/`
-and `journal/`. Settings has buttons to open it and to make a backup.
+The folder holds `strainless.db` (SQLite) and the copied files: `attachments/`, `courses/`,
+`documents/` and `journal/`. Settings has buttons to open it and to make a backup.
 
 ## Keyboard shortcuts
 
